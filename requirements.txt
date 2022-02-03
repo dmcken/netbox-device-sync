@@ -1,0 +1,6 @@
+# Core
+pynetbox
+
+# Drivers
+librouteros
+junos-eznc
