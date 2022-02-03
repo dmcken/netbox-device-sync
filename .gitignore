@@ -128,5 +128,9 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# SSH key files
 *.pub
 *.pri
+
+# Config file
+config.py
