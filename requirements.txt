@@ -1,5 +1,6 @@
 # Core
 pynetbox
+xmltodict
 
 # Drivers
 librouteros
