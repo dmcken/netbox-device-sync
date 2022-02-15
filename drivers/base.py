@@ -9,8 +9,12 @@ class ConnectError(Exception):
 
 
 class driver_base(metaclass = abc.ABCMeta):
-
     '''
+
+    Protocols:
+    - If a value is unknown return None, the sync will ignore that value
+      failing if it is required by netbox.
+
     To define in _connect_params:
     - hostname
     - username
