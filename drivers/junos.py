@@ -1,10 +1,12 @@
 '''
 '''
-
+import collections
 import jnpr.junos
 import jnpr.junos.exception
 import logging
+import pprint
 import re
+import xmltodict
 from lxml import etree
 
 # Local imports
@@ -30,6 +32,35 @@ class JunOS(drivers.base.driver_base):
             'result': None,
         },
     }
+
+    # Interfaces and logical units that are to be ignored
+    # For Juniper naming conventions:
+    # https://www.juniper.net/documentation/us/en/software/junos/interfaces-ethernet-switches/topics/topic-map/switches-interface-understanding.html
+    _interfaces_to_ignore = [
+        'fxp2',     # Temp
+        'fxp2.0',   # Temp
+        'gre',              # GRE
+        'gr-0/0/0',         # GRE
+        'ipip',             #
+        'ip-0/0/0',         # IP-in-IP
+        'lo0.16384',        #
+        'lo0.16385',        # 
+        'lsi',              # 
+        'lsq-0/0/0',        # link services queuing interface
+        'lt-0/0/0',         # 
+        'mt-0/0/0',         # Unknown
+        'mtun',             # 
+        'pimd',             # 
+        'pime',             # 
+        'pp0',              # 
+        'ppd0',             #
+        'ppe0',             # 
+        'sp-0/0/0',         # 
+        'sp-0/0/0.0',       # 
+        'sp-0/0/0.16383',   # 
+        'st0',              # 
+        'tap',              # 
+    ]
     
 
     def _connect(self, **kwargs):
@@ -41,7 +72,7 @@ class JunOS(drivers.base.driver_base):
             kwargs['gather_facts'] = True
 
             self._dev = jnpr.junos.Device(**kwargs)
-            self._dev.open()
+            self._dev.open(normalize=True)
 
         except jnpr.junos.exception.ConnectError:
             raise drivers.base.ConnectError()
@@ -69,16 +100,13 @@ class JunOS(drivers.base.driver_base):
 
 
     def get_interfaces(self,):
-        '''
-        
 
-        For Juniper naming conventions:
-        https://www.juniper.net/documentation/us/en/software/junos/interfaces-ethernet-switches/topics/topic-map/switches-interface-understanding.html
-        '''
 
         parent_interfaces = []
         normal_interfaces = []
         interface_units = []
+
+        '''
         config = self._get_config(self._config['interfaces'])
 
         interfaces = config.find('interfaces')
@@ -148,6 +176,106 @@ class JunOS(drivers.base.driver_base):
                     'desc': unit_desc,
                     'parent': '{0}'.format(int_name),
                 })
+        '''
+
+        # TODO: pull in the interfaces via something like show interfaces.
+        # We don't want to go deleting unconfigured interfaces
+        active_interfaces = []
+        rez = self._dev.rpc.get_interface_information()
+        int_dict = xmltodict.parse(etree.tostring(rez))
+        for curr_int in int_dict['interface-information']['physical-interface']:
+            logger.info("Processing interface: {0}".format(curr_int['name']))
+            if curr_int['name'] in self._interfaces_to_ignore:
+                logger.info("Ignoring")
+                continue
+
+            #print("Interface name: {0}".format(curr_int['name']))
+
+            try:
+                interface_description = curr_int['description']
+            except KeyError:
+                interface_description = None
+
+            try:
+                interface_mac = curr_int['current-physical-address']
+                if isinstance(interface_mac, collections.OrderedDict):
+                    interface_mac = interface_mac['#text']
+            except KeyError:
+                interface_mac = None
+
+            try:
+                interface_mtu = int(curr_int['mtu'])
+            except ValueError:
+                interface_mtu = None
+
+            # Lag interfaces interfaces
+            if re.match('ae[0-9]+', curr_int['name']):
+                parent_interfaces.append({
+                    'name': "{0}".format(curr_int['name']),
+                    'mtu':  interface_mtu,
+                    'type': 'lag',
+                    'desc': interface_description,
+                    'mac':  interface_mac,
+                })
+            #TODO: Handle bridge interfaces
+            else: # Every other type of interface
+                # 'if-type', 'GRE' - for GRE interfaces
+                normal_interfaces.append({
+                    'name': "{0}".format(curr_int['name']),
+                    'mtu':  interface_mtu,
+                    'type': None,
+                    'desc': interface_description,
+                    'mac': interface_mac,
+                })
+            if 'logical-interface' in curr_int:
+                
+                # In the case of a single unit it is a direct OrderedDict vs list of OrderedDict
+                if isinstance(curr_int['logical-interface'], list):
+                    logical_int_list = curr_int['logical-interface']
+                else:
+                    logical_int_list = [curr_int['logical-interface']]
+
+                for curr_logical_int in logical_int_list:
+                    if curr_logical_int['name'] in self._interfaces_to_ignore:
+                        continue
+
+                    #pprint.pprint(curr_logical_int)
+                    try:
+                        unit_descripion = curr_logical_int['description']
+                    except KeyError:
+                        unit_descripion = None
+
+                    try:
+                        unit_mtu = 0
+                        if isinstance(curr_logical_int['address-family'], list):
+                            address_family_list = curr_logical_int['address-family']
+                        else:
+                            address_family_list = [curr_logical_int['address-family']]
+                    except KeyError:
+                        # No address families under the unit, why?
+                        continue
+
+                    for curr_address_family in address_family_list:
+                        try:
+                            address_family_mtu = int(curr_address_family['mtu'])
+                        except ValueError:
+                            address_family_mtu = 0
+                            
+                        if address_family_mtu > unit_mtu:
+                            unit_mtu = address_family_mtu
+
+                    # Seems for the ethernet-switching family the MTU is 0
+                    if unit_mtu == 0:
+                        unit_mtu = interface_mtu
+
+                    interface_units.append({
+                        'name': "{0}".format(curr_logical_int['name']),
+                        'mtu': unit_mtu,
+                        'mac': None,
+                        'type': 'virtual',
+                        'desc': unit_descripion,
+                        'parent': '{0}'.format(curr_int['name']),
+                    })
 
         # This ordering is important
         # We are creating certain parent interfaces like aeX, lo0 first
