@@ -64,18 +64,38 @@ def sync_interfaces(nb, device_nb, device_conn):
 
         if curr_dev_interface['name'] in nb_interface_dict:
             # Update
-            logger.debug("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
+            
             curr_nb_obj = nb_interface_dict[curr_dev_interface['name']]
+            changed = {}
             for k,v in cleaned_params.items():
                 # Only update if different
-                if getattr(curr_nb_obj,k) != v:
+
+                # Type's get has the value in type.value vs type itself.
+                # Ugly hack for now.
+                if k == 'type': 
+                    if curr_nb_obj.type.value != v:
+                        changed[k] = {
+                            'old': curr_nb_obj.type.value,
+                            'new': v,
+                        }
+                        curr_nb_obj.type = v
+                elif getattr(curr_nb_obj,k) != v:
+                    changed[k] = {
+                        'old': getattr(curr_nb_obj,k),
+                        'new': v,
+                    }
                     setattr(curr_nb_obj, k, v)
-            curr_nb_obj.save()
+                    
+
+            if changed:
+                logger.debug("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, changed))
+                logger.debug("Parameters changed: {0}".format(changed))
+                curr_nb_obj.save()
         else:
             # Create
             if 'type' not in cleaned_params:
                 cleaned_params['type'] = 'other'
-                
+
             logger.debug("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
             nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
             #TODO: Error checking?
