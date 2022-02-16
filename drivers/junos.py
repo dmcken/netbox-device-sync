@@ -1,6 +1,7 @@
 '''
 '''
 import collections
+import ipaddress
 import jnpr.junos
 import jnpr.junos.exception
 import logging
@@ -10,9 +11,13 @@ import xmltodict
 from lxml import etree
 
 # Local imports
-import drivers.base 
+import drivers.base
+import utils
 
 logger = logging.getLogger(__name__)
+
+
+
 
 class JunOS(drivers.base.driver_base):
 
@@ -110,12 +115,11 @@ class JunOS(drivers.base.driver_base):
         rez = self._dev.rpc.get_interface_information()
         int_dict = xmltodict.parse(etree.tostring(rez))
         for curr_int in int_dict['interface-information']['physical-interface']:
-            logger.info("Processing interface: {0}".format(curr_int['name']))
             if curr_int['name'] in self._interfaces_to_ignore:
                 logger.info("Ignoring")
                 continue
 
-            #print("Interface name: {0}".format(curr_int['name']))
+            logger.info("Processing interface: {0}".format(curr_int['name']))
 
             try:
                 interface_description = curr_int['description']
@@ -214,29 +218,72 @@ class JunOS(drivers.base.driver_base):
 
         ip_addresses = []
 
-        config = self._get_config(self._config['interfaces'])
+        rez = self._dev.rpc.get_interface_information()
+        int_dict = xmltodict.parse(etree.tostring(rez))
+        for curr_int in int_dict['interface-information']['physical-interface']:
+            
+            # Skip the ignored interfaces
+            if curr_int['name'] in self._interfaces_to_ignore:
+                continue
 
-        interfaces = config.find('interfaces')
+            #logger.info("Processing interface: {0}".format(curr_int['name']))
+            if 'logical-interface' in curr_int:
+                # In the case of a single unit it is a direct OrderedDict vs list of OrderedDict
+                if isinstance(curr_int['logical-interface'], list):
+                    logical_int_list = curr_int['logical-interface']
+                else:
+                    logical_int_list = [curr_int['logical-interface']]
 
-        for interface in interfaces.findall('interface'):
-            interface_name = interface.find('name').text
-            for unit in interface.findall('unit'):
-                unit_name = unit.find('name').text
+                for curr_logical_int in logical_int_list:
 
-                # Now start going through the families
-                for family_inet in unit.find('family').findall('inet'):
-                    for family_inet_address in family_inet.findall('address'):
-                        ip_addresses.append({
-                            'interface': "{0}.{1}".format(interface_name, unit_name),
-                            'address': family_inet_address.find('name').text,
-                        })
+                    if curr_logical_int['name'] in self._interfaces_to_ignore:
+                        continue
 
-                for family_inet in unit.find('family').findall('inet6'):
-                    for family_inet_address in family_inet.findall('address'):
-                        ip_addresses.append({
-                            'interface': "{0}.{1}".format(interface_name, unit_name),
-                            'address': family_inet_address.find('name').text,
-                        })
+                    try:
+                        unit_mtu = 0
+                        if isinstance(curr_logical_int['address-family'], list):
+                            address_family_list = curr_logical_int['address-family']
+                        else:
+                            address_family_list = [curr_logical_int['address-family']]
+                    except KeyError:
+                        # No address families under the unit, why?
+                        continue
+
+                    for curr_address_family in address_family_list:
+                        if curr_address_family['address-family-name'] not in ['inet', 'inet6']:
+                            continue
+
+                        #logger.debug("curr_address_family:\n{0}".format(pprint.pformat(curr_address_family)))
+
+                        if isinstance(curr_address_family['interface-address'], list):
+                            interface_address_list = curr_address_family['interface-address']
+                        else:
+                            interface_address_list = [curr_address_family['interface-address']]
+
+                        for curr_address in interface_address_list:
+                            try:
+                                _,subnet = curr_address['ifa-destination'].split('/')
+
+                                interface_addr = ipaddress.ip_interface("{0}/{1}".format(
+                                    curr_address['ifa-local'],
+                                    subnet,
+                                ))
+                            except KeyError:
+                                # No subnet is set so this is a host address
+                                interface_addr = ipaddress.ip_interface("{0}".format(
+                                    curr_address['ifa-local']))
+
+                            if interface_addr.version == 6:
+                                # Skip link local addresses
+                                if interface_addr in utils.link_local_subnet:
+                                    continue
+
+                            ip_addresses.append({
+                                'address': interface_addr,
+                                'vrf': None,
+                                'status': 'Active',
+                                'interface': "{0}".format(curr_logical_int['name']),
+                            })
 
         return ip_addresses
             
