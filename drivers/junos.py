@@ -116,10 +116,9 @@ class JunOS(drivers.base.driver_base):
         int_dict = xmltodict.parse(etree.tostring(rez))
         for curr_int in int_dict['interface-information']['physical-interface']:
             if curr_int['name'] in self._interfaces_to_ignore:
-                logger.info("Ignoring")
                 continue
 
-            logger.info("Processing interface: {0}".format(curr_int['name']))
+            #logger.info("Processing interface: {0}".format(curr_int['name']))
 
             try:
                 interface_description = curr_int['description']
@@ -214,7 +213,8 @@ class JunOS(drivers.base.driver_base):
         return parent_interfaces + normal_interfaces + interface_units
 
     def get_ipaddresses(self,):
-
+        '''
+        '''
 
         ip_addresses = []
 
