@@ -106,80 +106,6 @@ class JunOS(drivers.base.driver_base):
         normal_interfaces = []
         interface_units = []
 
-        '''
-        config = self._get_config(self._config['interfaces'])
-
-        interfaces = config.find('interfaces')
-
-        for interface in interfaces.findall('interface'):
-            int_name = interface.find('name').text
-
-            try:
-                int_desc = interface.find('description').text
-            except AttributeError:
-                int_desc = ""
-
-            try:
-                int_mtu = interface.find('mtu').text
-            except AttributeError:
-                int_mtu = 1514
-
-            logger.debug("Interface name: {0}".format(int_name))
-
-            if int_name in ['lo0', 'vlan', 'irb']:
-                parent_interfaces.append({
-                    'name': "{0}".format(int_name),
-                    'mtu':  int_mtu,
-                    'type': 'virtual',
-                    'desc': int_desc,
-                })
-            elif re.match('ae[0-9]+', int_name):
-                parent_interfaces.append({
-                    'name': "{0}".format(int_name),
-                    'mtu':  int_mtu,
-                    'type': 'lag',
-                    'desc': int_desc,
-                })
-            else:
-                # TODO: Handle LAG slave interfaces
-                # Insert into normal_interfaces
-                normal_interfaces.append({
-                    'name': "{0}".format(int_name),
-                    'mtu':  int_mtu,
-                    'type': 'other',
-                    'desc': int_desc,
-                })
-
-            
-            for unit in interface.findall('unit'):
-                unit_name = unit.find('name').text
-                try:
-                    unit_desc = unit.find('description').text
-                except AttributeError:
-                    unit_desc = ''
-
-                try:
-                    unit_mtu = int(unit.find('mtu').text)
-                except AttributeError:
-                    #logger.error("MTU parse error: {0}".format(etree.tostring(unit, encoding='unicode', pretty_print=True)))
-                    unit_mtu = 1500
-
-                logger.debug("Unit: {0}".format(unit_name))
-
-                # TODO: Detect ethernet-switching and update 802.1Q settings.
-
-                interface_units.append({
-                    'name': "{0}.{1}".format(int_name, unit_name),
-                    'mtu': unit_mtu,
-                    #'mac': None,
-                    'type': 'virtual',
-                    'desc': unit_desc,
-                    'parent': '{0}'.format(int_name),
-                })
-        '''
-
-        # TODO: pull in the interfaces via something like show interfaces.
-        # We don't want to go deleting unconfigured interfaces
         active_interfaces = []
         rez = self._dev.rpc.get_interface_information()
         int_dict = xmltodict.parse(etree.tostring(rez))
@@ -214,8 +140,8 @@ class JunOS(drivers.base.driver_base):
                     'name': "{0}".format(curr_int['name']),
                     'mtu':  interface_mtu,
                     'type': 'lag',
-                    'desc': interface_description,
-                    'mac':  interface_mac,
+                    'description': interface_description,
+                    'mac_address':  interface_mac,
                 })
             #TODO: Handle bridge interfaces
             else: # Every other type of interface
@@ -224,8 +150,8 @@ class JunOS(drivers.base.driver_base):
                     'name': "{0}".format(curr_int['name']),
                     'mtu':  interface_mtu,
                     'type': None,
-                    'desc': interface_description,
-                    'mac': interface_mac,
+                    'description': interface_description,
+                    'mac_address': interface_mac,
                 })
             if 'logical-interface' in curr_int:
                 
@@ -271,9 +197,9 @@ class JunOS(drivers.base.driver_base):
                     interface_units.append({
                         'name': "{0}".format(curr_logical_int['name']),
                         'mtu': unit_mtu,
-                        'mac': None,
+                        'mac_address': None,
                         'type': 'virtual',
-                        'desc': unit_descripion,
+                        'description': unit_descripion,
                         'parent': '{0}'.format(curr_int['name']),
                     })
 
