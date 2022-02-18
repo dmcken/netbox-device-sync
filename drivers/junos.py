@@ -44,38 +44,40 @@ class JunOS(drivers.base.driver_base):
     # https://www.juniper.net/documentation/us/en/software/junos/interfaces-fundamentals/topics/topic-map/router-interfaces-overview.html
     # https://www.juniper.net/documentation/us/en/software/junos/interfaces-encryption/topics/topic-map/tunnel-services-overview.html
     _interfaces_to_ignore = [
-        'cbp0',             # customer backbone port 
-        'dsc',              # Discard interface
-        'em0',              # Internal cross connect between routing engine and control board.
-        'em1',              # Internal cross connect between routing engine and control board.
-        'esi',              # Ethernet segment identifier?
+        'ae[0-9]+.32767',               # We only want to ignore the .32767 sub-interface for any aeX interfaces
+        'bme0',
+        'cbp0',                         # Customer backbone port 
+        'dsc',                          # Discard interface
+        'em[0-9]+',                          # Internal cross connect between routing engine and control board.
+        'esi',                          # Ethernet segment identifier?
         'fxp2',     # Temp
         'fxp2.0',   # Temp
-        'gre',              # GRE
-        'ipip',             # IP-in-IP
-        'jsrv',             # Juniper services interface.
-        'lc-0/0/0',         # Internally generated interface that is not configurable.
-        'lo0.16384',        #
-        'lo0.16385',        # 
-        'lsi',              # 
-        'lsq-0/0/0',        # link services queuing interface
-        'lt-0/0/0',         # 
-        'mt-0/0/0',         # Unknown
-        'mtun',             # 
-        'pfe-0/0/0',        # Packet forwarding engine
-        'pfh-0/0/0',        # https://kb.juniper.net/InfoCenter/index?page=content&id=KB23578&cat=MX_SERIES&actp=LIST
-        'pimd',             # 
-        'pime',             # 
-        'pp0',              # 
-        'ppd0',             #
-        'ppe0',             # 
-        'si-0/0/0.0',       # Services-inline interface (only ignore the logical interfaces)
-        'sp-0/0/0',         # 
+        'gre',                          # GRE
+        'ipip',                         # IP-in-IP
+        'jsrv',                         # Juniper services interface.
+        'lc-[0-9]+/[0-9]+/[0-9]+',      # Internally generated interface that is not configurable.
+        'lo0.16384',                    #
+        'lo0.16385',                    # 
+        'lsi',                          # 
+        'lsq-0/0/0',                    # link services queuing interface
+        'lt-0/0/0',                     # 
+        'mt-0/0/0',                     # Unknown
+        'mtun',                         # 
+        'pfe-[0-9]+/[0-9]+/[0-9]+',     # Packet forwarding engine
+        'pfh-[0-9]+/[0-9]+/[0-9]+',     # https://kb.juniper.net/InfoCenter/index?page=content&id=KB23578&cat=MX_SERIES&actp=LIST
+        'pimd',                         # 
+        'pime',                         # 
+        'pp0',                          # 
+        'ppd0',                         #
+        'ppe0',                         # 
+        'si-0/0/0.0',                   # Services-inline interface (only ignore the logical interfaces)
+        'sp-0/0/0',                     # 
         'sp-0/0/0.0',       # 
         'sp-0/0/0.16383',   # 
         'st0',              # 
         'tap',              # 
     ]
+    _interfaces_to_ignore_regex = "({0})".format("|".join(_interfaces_to_ignore))
     
 
     def _connect(self, **kwargs):
@@ -132,7 +134,7 @@ class JunOS(drivers.base.driver_base):
         int_dict = xmltodict.parse(etree.tostring(rez))
         for curr_int in int_dict['interface-information']['physical-interface']:
 
-            if curr_int['name'] in self._interfaces_to_ignore:
+            if re.match(self._interfaces_to_ignore_regex, curr_int['name']):
                 continue
 
             #logger.debug("Processing interface:\n{0}".format(pprint.pformat(curr_int, width=200)))
@@ -186,10 +188,7 @@ class JunOS(drivers.base.driver_base):
 
                 for curr_logical_int in logical_int_list:
                     
-                    if int(curr_logical_int['name'].rsplit('.', maxsplit=1)[1]) == 32767:
-                        continue
-
-                    if curr_logical_int['name'] in self._interfaces_to_ignore:
+                    if re.match(self._interfaces_to_ignore_regex, curr_logical_int['name']):
                         continue
 
                     try:
@@ -259,7 +258,7 @@ class JunOS(drivers.base.driver_base):
         for curr_int in int_dict['interface-information']['physical-interface']:
             
             # Skip the ignored interfaces
-            if curr_int['name'] in self._interfaces_to_ignore:
+            if re.match(self._interfaces_to_ignore_regex, curr_int['name']):
                 continue
 
             #logger.info("Processing interface: {0}".format(curr_int['name']))
