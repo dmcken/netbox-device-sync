@@ -16,9 +16,6 @@ import utils
 
 logger = logging.getLogger(__name__)
 
-
-
-
 class JunOS(drivers.base.driver_base):
 
     _connect_params = {
