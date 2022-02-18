@@ -41,13 +41,20 @@ class JunOS(drivers.base.driver_base):
     # Interfaces and logical units that are to be ignored
     # For Juniper naming conventions:
     # https://www.juniper.net/documentation/us/en/software/junos/interfaces-ethernet-switches/topics/topic-map/switches-interface-understanding.html
+    # https://www.juniper.net/documentation/us/en/software/junos/interfaces-fundamentals/topics/topic-map/router-interfaces-overview.html
+    # https://www.juniper.net/documentation/us/en/software/junos/interfaces-encryption/topics/topic-map/tunnel-services-overview.html
     _interfaces_to_ignore = [
+        'cbp0',             # customer backbone port 
+        'dsc',              # Discard interface
+        'em0',              # Internal cross connect between routing engine and control board.
+        'em1',              # Internal cross connect between routing engine and control board.
+        'esi',              # Ethernet segment identifier?
         'fxp2',     # Temp
         'fxp2.0',   # Temp
         'gre',              # GRE
-        'gr-0/0/0',         # GRE
-        'ipip',             #
-        'ip-0/0/0',         # IP-in-IP
+        'ipip',             # IP-in-IP
+        'jsrv',             # Juniper services interface.
+        'lc-0/0/0',         # Internally generated interface that is not configurable.
         'lo0.16384',        #
         'lo0.16385',        # 
         'lsi',              # 
@@ -55,11 +62,14 @@ class JunOS(drivers.base.driver_base):
         'lt-0/0/0',         # 
         'mt-0/0/0',         # Unknown
         'mtun',             # 
+        'pfe-0/0/0',        # Packet forwarding engine
+        'pfh-0/0/0',        # https://kb.juniper.net/InfoCenter/index?page=content&id=KB23578&cat=MX_SERIES&actp=LIST
         'pimd',             # 
         'pime',             # 
         'pp0',              # 
         'ppd0',             #
         'ppe0',             # 
+        'si-0/0/0.0',       # Services-inline interface (only ignore the logical interfaces)
         'sp-0/0/0',         # 
         'sp-0/0/0.0',       # 
         'sp-0/0/0.16383',   # 
@@ -105,6 +115,12 @@ class JunOS(drivers.base.driver_base):
 
 
     def get_interfaces(self,):
+        '''
+        
+        
+
+        '''
+        # TODO: lag slaves are not setup atm
 
 
         parent_interfaces = []
@@ -115,10 +131,11 @@ class JunOS(drivers.base.driver_base):
         rez = self._dev.rpc.get_interface_information()
         int_dict = xmltodict.parse(etree.tostring(rez))
         for curr_int in int_dict['interface-information']['physical-interface']:
+
             if curr_int['name'] in self._interfaces_to_ignore:
                 continue
 
-            #logger.info("Processing interface: {0}".format(curr_int['name']))
+            #logger.debug("Processing interface:\n{0}".format(pprint.pformat(curr_int, width=200)))
 
             try:
                 interface_description = curr_int['description']
@@ -135,6 +152,9 @@ class JunOS(drivers.base.driver_base):
             try:
                 interface_mtu = int(curr_int['mtu'])
             except ValueError:
+                interface_mtu = None
+            except KeyError:
+                logger.error("Missing MTU for interface: {0}".format(curr_int))
                 interface_mtu = None
 
             # Lag interfaces interfaces
@@ -165,10 +185,23 @@ class JunOS(drivers.base.driver_base):
                     logical_int_list = [curr_int['logical-interface']]
 
                 for curr_logical_int in logical_int_list:
+                    
+                    if int(curr_logical_int['name'].rsplit('.', maxsplit=1)[1]) == 32767:
+                        continue
+
                     if curr_logical_int['name'] in self._interfaces_to_ignore:
                         continue
 
-                    #pprint.pprint(curr_logical_int)
+                    try:
+                        # aenet is the sub-interfaces on the slave interfaces for an aeX interface
+                        # e.g. xe-0/0/0.5 is created automatically for ae0.5 if xe-0/0/0 is a 
+                        # slave of ae0.
+                        if curr_logical_int['address-family']['address-family-name'] in ['aenet']:
+                            continue
+                    except (KeyError,TypeError):
+                        pass
+
+                    #logger.debug("Logical interface: {0}".format(pprint.pformat(curr_logical_int)))
                     try:
                         unit_descripion = curr_logical_int['description']
                     except KeyError:
@@ -185,9 +218,12 @@ class JunOS(drivers.base.driver_base):
                         continue
 
                     for curr_address_family in address_family_list:
+
                         try:
                             address_family_mtu = int(curr_address_family['mtu'])
                         except ValueError:
+                            address_family_mtu = 0
+                        except KeyError:
                             address_family_mtu = 0
                             
                         if address_family_mtu > unit_mtu:
@@ -239,6 +275,9 @@ class JunOS(drivers.base.driver_base):
                     if curr_logical_int['name'] in self._interfaces_to_ignore:
                         continue
 
+                    #logger.debug("Logical interface:\n{0}\n{1} - {2}".format(pprint.pformat(curr_logical_int),
+                    #    curr_logical_int['name'], curr_logical_int['name'] in self._interfaces_to_ignore))
+
                     try:
                         unit_mtu = 0
                         if isinstance(curr_logical_int['address-family'], list):
@@ -253,12 +292,20 @@ class JunOS(drivers.base.driver_base):
                         if curr_address_family['address-family-name'] not in ['inet', 'inet6']:
                             continue
 
-                        #logger.debug("curr_address_family:\n{0}".format(pprint.pformat(curr_address_family)))
+                        
+                        #logger.debug("curr_address_family on: {0}\n{1}".format(curr_logical_int['name'],pprint.pformat(curr_address_family)))
 
-                        if isinstance(curr_address_family['interface-address'], list):
-                            interface_address_list = curr_address_family['interface-address']
-                        else:
-                            interface_address_list = [curr_address_family['interface-address']]
+                        try:
+                            if isinstance(curr_address_family['interface-address'], list):
+                                interface_address_list = curr_address_family['interface-address']
+                            else:
+                                interface_address_list = [curr_address_family['interface-address']]
+                        except KeyError:
+                            # To handle cases like this:
+                            # unit 0 {
+                            #     family inet;
+                            # }
+                            continue
 
                         for curr_address in interface_address_list:
                             try:
@@ -281,11 +328,22 @@ class JunOS(drivers.base.driver_base):
                             ip_addresses.append({
                                 'address': interface_addr,
                                 'vrf': None,
-                                'status': 'Active',
+                                'status': 'active',
                                 'interface': "{0}".format(curr_logical_int['name']),
                             })
 
         return ip_addresses
+
+    def get_routes():
+
+        routes = []
+
+        # Fetch static
+        # Fetch aggregate
+        # Fetch access
+        # Fetch anchor
+
+        return routes
             
 
 

@@ -49,12 +49,12 @@ def sync_interfaces(nb, device_nb, device_conn):
     to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))        
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
     to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
-    logger.info("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
+    logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
 
     for curr_dev_interface in dev_interfaces:
 
         cleaned_params = {}
-        for curr_param in ['description', 'mac', 'mtu', 'name', 'type']:
+        for curr_param in ['description','mac','mtu','name','parent','type']:
             try:
                 if curr_dev_interface[curr_param] == None:
                     continue
@@ -75,10 +75,30 @@ def sync_interfaces(nb, device_nb, device_conn):
                 if k == 'type': 
                     if curr_nb_obj.type.value != v:
                         changed[k] = {
-                            'old': curr_nb_obj.type.value,
+                            'old': str(curr_nb_obj.type.value),
                             'new': v,
                         }
                         curr_nb_obj.type = v
+                elif k == 'parent':
+                    if v:
+                        nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                        new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
+                        new_parent = nb_parent_interfaces[0].id
+                    else:
+                        # Its None
+                        new_parent_desc = "{0}".format(v)
+
+                    if curr_nb_obj.parent:
+                        old_parent_desc = "{0}/{1}".format(curr_nb_obj.parent.id, nb_parent_interfaces[0].name)
+                    else:
+                        old_parent_desc = "None"
+
+                    if new_parent_desc != old_parent_desc:
+                        changed[k] = {
+                            'old': old_parent_desc,
+                            'new': new_parent_desc,
+                        }
+                        setattr(curr_nb_obj, k, new_parent)
                 elif getattr(curr_nb_obj,k) != v:
                     changed[k] = {
                         'old': getattr(curr_nb_obj,k),
@@ -89,12 +109,22 @@ def sync_interfaces(nb, device_nb, device_conn):
 
             if changed:
                 logger.debug("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, changed))
-                logger.debug("Parameters changed: {0}".format(changed))
                 curr_nb_obj.save()
         else:
             # Create
             if 'type' not in cleaned_params:
+                # Type is mandatory
                 cleaned_params['type'] = 'other'
+
+            if 'parent' in cleaned_params:
+                # Parent needs to be converted from the name to its id.
+                if cleaned_params['parent'] != None:
+                    nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                    try:
+                        cleaned_params['parent'] = nb_parent_interfaces[0].id
+                    except (KeyError,AttributeError):
+                        logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, v))
+                        cleaned_params['parent'] = None
 
             logger.debug("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
             nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
@@ -104,6 +134,77 @@ def sync_interfaces(nb, device_nb, device_conn):
     nb_interfaces_to_delete = filter(lambda x: x.name in to_delete_from_nb, nb_interfaces)
     for curr_int_to_delete in nb_interfaces_to_delete:
         curr_int_to_delete.delete()
+
+
+    return
+
+
+def sync_ips(nb, device_nb, device_conn):
+    '''
+    
+    '''
+
+    # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
+    dev_ips = device_conn.get_ipaddresses()
+    #pprint.pprint(dev_ips, width = 200)
+
+    # We need the interfaces to map the interface name to the netbox id.
+    nb_interfaces = nb.dcim.interfaces.filter(device=device_nb.name)
+    nb_interface_dict = {v.name:v for v in nb_interfaces}
+
+    for curr_ip in dev_ips:
+        # logger.debug("Processing IP address: {0}".format(curr_ip))
+        if curr_ip['interface'] not in nb_interface_dict:
+            logger.error("Missing interface for IP: {1}".format(curr_ip))
+            continue
+
+        nb_ip_network = nb.ipam.prefixes.filter(prefix=str(curr_ip['address'].network))
+        if not nb_ip_network:
+            logger.error("Creating prefix: {0}".format(curr_ip['address'].network))
+            nb.ipam.prefixes.create(
+                prefix="{0}".format(curr_ip['address'].network),
+                vrf=curr_ip['vrf'],
+                status='active',
+            )
+
+        nb_ip_record = nb.ipam.ip_addresses.filter(address=curr_ip['address'])
+        if nb_ip_record:
+            if len(nb_ip_record) == 1:
+                # Update
+                changed = False
+
+                if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip['interface']].id or \
+                   nb_ip_record[0].assigned_object_type != 'dcim.interface':
+                    nb_ip_record[0].assigned_object_id = nb_interface_dict[curr_ip['interface']].id
+                    nb_ip_record[0].assigned_object_type = 'dcim.interface'
+                    changed = True
+
+                if nb_ip_record[0].status.value != curr_ip['status']:
+                    nb_ip_record[0].status = curr_ip['status']
+                    changed = True
+
+                if nb_ip_record[0].vrf != curr_ip['vrf']:
+                    nb_ip_record[0].vrf = curr_ip['vrf']
+                    changed = True
+
+                if changed == True:
+                    logger.info("Updating IP record: {0}".format(curr_ip))
+                    nb_ip_record[0].save()
+            else:
+                logger.error("Multiple IPs found for: {0}".format(curr_ip['address']))
+                continue
+        else:
+            # Create
+            logger.info("Creating IP record: {0}".format(curr_ip))
+            nb.ipam.ip_addresses.create(
+                assigned_object_id=nb_interface_dict[curr_ip['interface']].id,
+                assigned_object_type='dcim.interface',
+                address=str(curr_ip['address']),
+                status=curr_ip['status'],
+                vrf=curr_ip['vrf'],
+            )
+
+    return
 
 def main() -> None:
     '''
@@ -146,7 +247,17 @@ def main() -> None:
         if device_nb.primary_ip == None:
             continue
 
-        if device_nb.name not in ['DC-GML-CE1']:
+        devices_to_try = [
+            'DC-GML-CE1',
+            'DC-GML-CE2',
+            'DC-BRZ-CE1',
+            'DC-BRZ-CE3',
+            'DC-MDV-IE1',
+            'DC-NAP-IE2',
+            'DC-DC1-SPINE1'
+        ]
+
+        if device_nb.name not in devices_to_try:
             continue
 
         # Create a driver passing it the credentials and the primary IP
@@ -160,20 +271,14 @@ def main() -> None:
             logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
             continue
 
-        # sync_vlans()
+        
         sync_interfaces(nb, device_nb, device_conn)
-        # sync_ips(nb, device_nb, device_conn)
+        sync_ips(nb, device_nb, device_conn)
+
+        # sync_vlans()
         # sync_routes(nb, device_nb, device_conn)
         # sync_neighbours(nb, device_nb, device_conn)
-        
 
-        # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
-        # dev_ips = device_conn.get_ipaddresses()
-        # pprint.pprint(dev_ips)
-        # rez = nb.ipam.prefixes.filter(prefix='10.254.253.156/30') # [] or list with entry [131.72.76.0/32]
-        # rez = nb.ipam.ip_addresses.filter(address="10.254.253.158/30")
-        # rez = nb.ipam.ip_addresses.filter(address="10.254.253.158") # This seems to be taking longer
-        # 
 
         # To Sync
         # - Vlans - Only for devices in charge of the vlan domain
@@ -188,6 +293,8 @@ def main() -> None:
         del device_conn
 
         logger.info("Completed processing")
+
+    logger.info("Main() - Done")
 
 
 main()
