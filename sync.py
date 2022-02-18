@@ -43,13 +43,13 @@ def sync_interfaces(nb, device_nb, device_conn):
     nb_interfaces_names = set(map(lambda x: x.name, nb_interfaces))
     dev_interfaces = device_conn.get_interfaces()
     dev_interfaces_names = set(map(lambda x: x['name'], dev_interfaces))
-    logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
-        pprint.pformat(dev_interfaces, width=200)))
+    #logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
+    #    pprint.pformat(dev_interfaces, width=200)))
 
     to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))        
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
     to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
-    logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
+    #logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
 
     for curr_dev_interface in dev_interfaces:
 
@@ -119,11 +119,11 @@ def sync_interfaces(nb, device_nb, device_conn):
             if 'parent' in cleaned_params:
                 # Parent needs to be converted from the name to its id.
                 if cleaned_params['parent'] != None:
-                    nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                    nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params['parent'])
                     try:
                         cleaned_params['parent'] = nb_parent_interfaces[0].id
                     except (KeyError,AttributeError):
-                        logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, v))
+                        logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, cleaned_params['parent']))
                         cleaned_params['parent'] = None
 
             logger.debug("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
@@ -155,7 +155,7 @@ def sync_ips(nb, device_nb, device_conn):
     for curr_ip in dev_ips:
         # logger.debug("Processing IP address: {0}".format(curr_ip))
         if curr_ip['interface'] not in nb_interface_dict:
-            logger.error("Missing interface for IP: {1}".format(curr_ip))
+            logger.error("Missing interface for IP: {0}".format(curr_ip))
             continue
 
         nb_ip_network = nb.ipam.prefixes.filter(prefix=str(curr_ip['address'].network))
@@ -213,7 +213,7 @@ def main() -> None:
     BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     logging.getLogger('ncclient').setLevel(logging.ERROR)
-    #logging.getLogger('ncclient.operations.rpc').setLevel(logging.ERROR)
+    logging.getLogger('drivers.junos').setLevel(logging.ERROR)
     #logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.ERROR)
     #logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     logging.basicConfig(level = logging.DEBUG, format=BASIC_FORMAT)
@@ -247,19 +247,6 @@ def main() -> None:
         if device_nb.primary_ip == None:
             continue
 
-        devices_to_try = [
-            'DC-GML-CE1',
-            'DC-GML-CE2',
-            'DC-BRZ-CE1',
-            'DC-BRZ-CE3',
-            'DC-MDV-IE1',
-            'DC-NAP-IE2',
-            'DC-DC1-SPINE1'
-        ]
-
-        if device_nb.name not in devices_to_try:
-            continue
-
         # Create a driver passing it the credentials and the primary IP
         device_ip = str(ipaddress.ip_interface(device_nb.primary_ip).ip)
         full_dev_creds = {**device_credentials, 'hostname': device_ip}
@@ -271,7 +258,7 @@ def main() -> None:
             logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
             continue
 
-        
+        # Now to sync the data
         sync_interfaces(nb, device_nb, device_conn)
         sync_ips(nb, device_nb, device_conn)
 
@@ -292,9 +279,9 @@ def main() -> None:
 
         del device_conn
 
-        logger.info("Completed processing")
+        #logger.info("Completed processing")
 
-    logger.info("Main() - Done")
+    logger.info("Done")
 
 
 main()
