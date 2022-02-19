@@ -10,6 +10,7 @@ import ipaddress
 import logging
 import pprint
 import pynetbox
+import re
 import sys
 import traceback
 
@@ -220,13 +221,16 @@ def main() -> None:
 
     nb = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
 
+    # Parse the config parameters
+    device_credentials = {}
+    for curr_dev_attr in dir(config):
+        attr_rez = re.match("DEV_([A-Za-z0-9]+)", curr_dev_attr)
+        if not attr_rez:
+            continue
 
-    device_credentials = {
-        'username': config.DEV_USERNAME,
-        #'password': 'passwd',
-        'key_file': config.DEV_KEYFILE,
-    }
+        device_credentials[attr_rez.group(1).lower()] = getattr(config, curr_dev_attr)
 
+    # Fetch and process the devices from netbox.
     devices = nb.dcim.devices.all()
 
     for device_nb in devices:
