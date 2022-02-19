@@ -212,12 +212,12 @@ def main() -> None:
     '''
 
     BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
-    logging.getLogger('ncclient').setLevel(logging.ERROR)
-    logging.getLogger('drivers.junos').setLevel(logging.ERROR)
-    #logging.getLogger('requests.packages.urllib3.connectionpool').setLevel(logging.ERROR)
+    # Upstream libraries
     #logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
-    logging.basicConfig(level = logging.DEBUG, format=BASIC_FORMAT)
+    #logging.getLogger('ncclient').setLevel(logging.ERROR)
+    # Internal libraries
+    logging.getLogger('drivers.routeros').setLevel(logging.DEBUG)
+    logging.basicConfig(level = logging.ERROR, format=BASIC_FORMAT)
 
     nb = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
 
