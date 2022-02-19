@@ -224,11 +224,16 @@ def main() -> None:
     # Parse the config parameters
     device_credentials = {}
     for curr_dev_attr in dir(config):
-        attr_rez = re.match("DEV_([A-Za-z0-9]+)", curr_dev_attr)
-        if not attr_rez:
+        attr_re = re.match("DEV_([A-Za-z0-9]+)", curr_dev_attr)
+        if not attr_re:
             continue
 
-        device_credentials[attr_rez.group(1).lower()] = getattr(config, curr_dev_attr)
+        attr_value = getattr(config, curr_dev_attr)
+
+        if not attr_value:
+            continue
+
+        device_credentials[attr_re.group(1).lower()] = attr_value
 
     # Fetch and process the devices from netbox.
     devices = nb.dcim.devices.all()
