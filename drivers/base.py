@@ -26,7 +26,7 @@ class driver_base(metaclass = abc.ABCMeta):
 
     def __init__(self, **kwargs) -> None:
         
-        
+        # Parse the 
         creds = {}
         for k,v in self._connect_params.items():
             try:
@@ -34,7 +34,7 @@ class driver_base(metaclass = abc.ABCMeta):
             except KeyError:
                 continue
 
-        # logger.debug("Creds within base: {0}".format(creds))
+        logger.debug("Creds within base: {0}".format(creds))
             
         self._connect(**creds)
 
@@ -43,6 +43,24 @@ class driver_base(metaclass = abc.ABCMeta):
 
     @abc.abstractmethod
     def _connect(self, **kwargs):
+        '''
+        Creates a connection to the device:
+
+        The incoming parameters will be from the config.py DEV_* with the DEV_
+        prefix removed and then lowercased (e.g. DEV_USERNAME becomes username).
+        
+        These parameters are then filtered and mapped using the _connect_params
+                
+        Example:
+        _connect_params = {
+            'hostname': 'host',
+            'username': 'user',
+            'keyfile':  'ssh_private_key_file',
+        }
+
+        will only accept the hostname, username and keyfile parameters and map them
+        to host, user and ssh_private_key_file respectively.
+        '''
         pass
 
 
