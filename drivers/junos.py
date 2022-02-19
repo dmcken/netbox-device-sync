@@ -22,7 +22,7 @@ class JunOS(drivers.base.driver_base):
         'hostname': 'host',
         'username': 'user',
         'password': 'passwd',
-        'key_file': 'ssh_private_key_file',
+        'keyfile':  'ssh_private_key_file',
     }
     _config = {
         'interfaces': {
