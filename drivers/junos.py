@@ -19,10 +19,10 @@ logger = logging.getLogger(__name__)
 class JunOS(drivers.base.driver_base):
 
     _connect_params = {
-        'hostname': 'host',
-        'username': 'user',
-        'password': 'passwd',
-        'keyfile':  'ssh_private_key_file',
+        'hostname': {'dest': 'host'},
+        'username': {'dest': 'user'},
+        'password': {'dest': 'passwd'},
+        'keyfile':  {'dest': 'ssh_private_key_file'},
     }
     _config = {
         'interfaces': {

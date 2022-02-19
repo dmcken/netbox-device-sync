@@ -26,11 +26,11 @@ class driver_base(metaclass = abc.ABCMeta):
 
     def __init__(self, **kwargs) -> None:
         
-        # Parse the 
+        # Parse the device connection parameters
         creds = {}
         for k,v in self._connect_params.items():
             try:
-                creds[v] = kwargs[k]
+                creds[v['dest']] = kwargs[k]
             except KeyError:
                 continue
 
@@ -48,6 +48,8 @@ class driver_base(metaclass = abc.ABCMeta):
 
         The incoming parameters will be from the config.py DEV_* with the DEV_
         prefix removed and then lowercased (e.g. DEV_USERNAME becomes username).
+        The hostname parameter is also added to this set of parameters and is
+        the current device's hostname / IP.
         
         These parameters are then filtered and mapped using the _connect_params
                 
@@ -60,16 +62,29 @@ class driver_base(metaclass = abc.ABCMeta):
 
         will only accept the hostname, username and keyfile parameters and map them
         to host, user and ssh_private_key_file respectively.
+
+        This setup should make allowing the drivers to share parameters that make
+        sense and break out the ones that don't. An example of this could be
+        defining DEV_ROUTEROS_PORT with a matching mapping of:
+            'routeros_port': 'port',
+        in the dictionary. The routeros driver will know what port to use for its
+        connections without requiring any changes to the other drivers.
         '''
         pass
 
 
     @abc.abstractmethod
     def get_interfaces(self,):
+        '''
+        TODO: Document what is expected of the drivers
+        '''
         pass
 
     @abc.abstractmethod
     def get_ipaddresses(self,):
+        '''
+        TODO: Document what is expected of the drivers
+        '''
         pass
 
     # @abc.abstractmethod
