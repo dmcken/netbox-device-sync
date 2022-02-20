@@ -72,11 +72,31 @@ class driver_base(metaclass = abc.ABCMeta):
         '''
         pass
 
+    @abc.abstractmethod
+    def _close(self,):
+        '''
+        Close the connection to the device
+        '''
+        pass
 
     @abc.abstractmethod
     def get_interfaces(self,):
         '''
         TODO: Document what is expected of the drivers
+
+        Return:
+        List of interface definitions:
+
+        Interface definitions:
+        - Dictionary containing the following fields:
+        -- description: Description of the interface (string,mandatory)
+        -- mac_address: MAC address of the interface (string,None allowed)
+        -- mtu: MTU of the interface (integer,None allowed)
+        -- name: Interface name (string,mandatory)
+        -- type: Type of the interface (string,None allowed)
+
+        Example:
+        {'description': None, 'mac_address': '64:87:88:ef:34:00', 'mtu': 1514, 'name': 'ge-0/0/0', 'type': None}
         '''
         pass
 
@@ -84,6 +104,19 @@ class driver_base(metaclass = abc.ABCMeta):
     def get_ipaddresses(self,):
         '''
         TODO: Document what is expected of the drivers
+
+        Return:
+        list of IP definitions:
+        
+        IP definition:
+        - Dictionary containing the following fields:
+        -- address: IP With subnet mask (IPv4Interface or IPv6Interface, mandatory)
+        -- interface:  name of the interface. (string,mandatory)
+        -- status: One of the netbox IP address statuses. The current list: active,reserved,deprecated,dhcp,slaac (string,mandatory)
+        -- vrf: VRF this IP sits within (string,If unknown set to None)
+        Example:
+        {'address': IPv4Interface('172.17.10.89/29'), 'interface': 'ge-0/0/2.0', 'status': 'active', 'vrf': None}
+
         '''
         pass
 
