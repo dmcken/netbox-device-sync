@@ -23,3 +23,5 @@ def parse_device_parameters(config):
             continue
 
         device_credentials[attr_re.group(1).lower()] = attr_value
+
+    return device_credentials
