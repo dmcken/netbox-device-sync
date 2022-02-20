@@ -69,10 +69,9 @@ class JunOS(drivers.base.driver_base):
         'ppe0',                         # 
         'si-0/0/0.0',                   # Services-inline interface (only ignore the logical interfaces)
         'sp-0/0/0',                     # 
-        'sp-0/0/0.0',       # 
-        'sp-0/0/0.16383',   # 
-        'st0',              # 
-        'tap',              # 
+        'sp-0/0/0.(0|16383)',           # 
+        'st0',                          # 
+        'tap',                          # 
     ]
     _interfaces_to_ignore_regex = "({0})".format("|".join(_interfaces_to_ignore))
     
@@ -87,7 +86,6 @@ class JunOS(drivers.base.driver_base):
 
             self._dev = jnpr.junos.Device(**kwargs)
             self._dev.open(normalize=True)
-
         except jnpr.junos.exception.ConnectError:
             raise drivers.base.ConnectError()
         except Exception as err:
@@ -95,8 +93,10 @@ class JunOS(drivers.base.driver_base):
             raise err
 
     def _close(self,):
-        if self._connection:
-            self._connection.close()
+        if self._dev:
+            self._dev.close()
+        del self._dev
+        
 
     def _get_config(self, xml_filter=None):
         
