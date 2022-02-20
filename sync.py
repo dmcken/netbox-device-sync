@@ -14,19 +14,13 @@ import re
 import sys
 import traceback
 
+# Local imports
 import config
-
 import drivers.junos
 import drivers.routeros
-
-# How best to make this dynamic (likely factory method)
-platform_to_driver = {
-    'JunOS':    drivers.junos.JunOS,
-    'RouterOS': drivers.routeros.RouterOS,
-}
+import utils
 
 logger = logging.getLogger(__name__)
-
 
 def sync_interfaces(nb, device_nb, device_conn):
     '''
@@ -44,13 +38,13 @@ def sync_interfaces(nb, device_nb, device_conn):
     nb_interfaces_names = set(map(lambda x: x.name, nb_interfaces))
     dev_interfaces = device_conn.get_interfaces()
     dev_interfaces_names = set(map(lambda x: x['name'], dev_interfaces))
-    #logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
-    #    pprint.pformat(dev_interfaces, width=200)))
+    logger.debug("Interface data for '{0}'\n{1}".format(device_nb.name,
+        pprint.pformat(dev_interfaces, width=200)))
 
     to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))        
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
     to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
-    #logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
+    logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
 
     for curr_dev_interface in dev_interfaces:
 
@@ -136,18 +130,16 @@ def sync_interfaces(nb, device_nb, device_conn):
     for curr_int_to_delete in nb_interfaces_to_delete:
         curr_int_to_delete.delete()
 
-
     return
 
-
-def sync_ips(nb, device_nb, device_conn):
+def sync_ips(nb, device_nb, device_conn) -> None:
     '''
     
     '''
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
     dev_ips = device_conn.get_ipaddresses()
-    #pprint.pprint(dev_ips, width = 200)
+    logger.debug("IP data for '{0}'\n{1}".format(device_nb.name, pprint.pformat(dev_ips, width=200)))
 
     # We need the interfaces to map the interface name to the netbox id.
     nb_interfaces = nb.dcim.interfaces.filter(device=device_nb.name)
@@ -168,10 +160,9 @@ def sync_ips(nb, device_nb, device_conn):
                 status='active',
             )
 
-        nb_ip_record = nb.ipam.ip_addresses.filter(address=curr_ip['address'])
-        if nb_ip_record:
+        if nb_ip_record := nb.ipam.ip_addresses.filter(address=curr_ip['address']):
+            # Update
             if len(nb_ip_record) == 1:
-                # Update
                 changed = False
 
                 if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip['interface']].id or \
@@ -188,7 +179,7 @@ def sync_ips(nb, device_nb, device_conn):
                     nb_ip_record[0].vrf = curr_ip['vrf']
                     changed = True
 
-                if changed == True:
+                if changed:
                     logger.info("Updating IP record: {0}".format(curr_ip))
                     nb_ip_record[0].save()
             else:
@@ -213,27 +204,22 @@ def main() -> None:
 
     BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     # Upstream libraries
-    #logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
-    #logging.getLogger('ncclient').setLevel(logging.ERROR)
+    logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
+    logging.getLogger('ncclient').setLevel(logging.ERROR)
     # Internal libraries
-    logging.getLogger('drivers.routeros').setLevel(logging.DEBUG)
-    logging.basicConfig(level = logging.ERROR, format=BASIC_FORMAT)
+    logging.getLogger('__main__').setLevel(logging.INFO)
+    logging.getLogger('drivers.routeros').setLevel(logging.ERROR)
+    logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
+
+    # How best to make this dynamic (likely factory method)
+    platform_to_driver = {
+        'JunOS':    drivers.junos.JunOS,
+        'RouterOS': drivers.routeros.RouterOS,
+    }
 
     nb = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
 
-    # Parse the config parameters
-    device_credentials = {}
-    for curr_dev_attr in dir(config):
-        attr_re = re.match("DEV_([A-Za-z0-9]+)", curr_dev_attr)
-        if not attr_re:
-            continue
-
-        attr_value = getattr(config, curr_dev_attr)
-
-        if not attr_value:
-            continue
-
-        device_credentials[attr_re.group(1).lower()] = attr_value
+    device_credentials = utils.parse_device_parameters(config)
 
     # Fetch and process the devices from netbox.
     devices = nb.dcim.devices.all()
@@ -241,7 +227,7 @@ def main() -> None:
     for device_nb in devices:
         logger.info("Processing device: {0}/{1} => {2} => {3}".format(device_nb.id, device_nb.name, device_nb.platform, device_nb.primary_ip))
 
-        if device_nb.platform == None:
+        if device_nb.platform is None:
             continue
 
         try:
@@ -250,10 +236,13 @@ def main() -> None:
             logger.error("Unsupported platform '{0}'".format(device_nb.platform))
             continue
 
-        if str(device_nb.platform) == 'RouterOS':
+        if str(device_nb.platform) not in ['RouterOS']:
             continue
 
-        if device_nb.primary_ip == None:
+        # if device_nb.name not in []:
+        #     continue
+
+        if device_nb.primary_ip is None:
             continue
 
         # Create a driver passing it the credentials and the primary IP
