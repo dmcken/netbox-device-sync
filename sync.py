@@ -206,7 +206,7 @@ def main() -> None:
     # Upstream libraries
     logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     logging.getLogger('ncclient').setLevel(logging.ERROR)
-    # Internal libraries
+    # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
     logging.getLogger('drivers.routeros').setLevel(logging.ERROR)
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
@@ -225,7 +225,7 @@ def main() -> None:
     devices = nb.dcim.devices.all()
 
     for device_nb in devices:
-        logger.info("Processing device: {0}/{1} => {2} => {3}".format(device_nb.id, device_nb.name, device_nb.platform, device_nb.primary_ip))
+        logger.info("Processing device: {0:04}/{1} => {2} => {3}".format(device_nb.id, device_nb.name, device_nb.platform, device_nb.primary_ip))
 
         if device_nb.platform is None:
             continue
