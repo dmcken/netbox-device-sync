@@ -75,7 +75,6 @@ def sync_interfaces(nb, device_nb, device_conn):
                         }
                         curr_nb_obj.type = v
                 elif k in ['bridge','lag','parent']:
-                    logger.info("Processing a parent parameter '{0}' => {1}/{2}".format(curr_dev_interface['name'], k,v))
                     if v:
                         nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
                         new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
