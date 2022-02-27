@@ -41,7 +41,7 @@ def sync_interfaces(nb, device_nb, device_conn):
     logger.debug("Interface data for '{0}'\n{1}".format(device_nb.name,
         pprint.pformat(dev_interfaces, width=200)))
 
-    to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))        
+    to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
     to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
     logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
@@ -49,9 +49,9 @@ def sync_interfaces(nb, device_nb, device_conn):
     for curr_dev_interface in dev_interfaces:
 
         cleaned_params = {}
-        for curr_param in ['description','mac','mtu','name','parent','type']:
+        for curr_param in ['bridge','description','lag','mac','mtu','name','parent','type']:
             try:
-                if curr_dev_interface[curr_param] == None:
+                if curr_dev_interface[curr_param] is None:
                     continue
             except KeyError:
                 continue
@@ -59,7 +59,7 @@ def sync_interfaces(nb, device_nb, device_conn):
 
         if curr_dev_interface['name'] in nb_interface_dict:
             # Update
-            
+
             curr_nb_obj = nb_interface_dict[curr_dev_interface['name']]
             changed = {}
             for k,v in cleaned_params.items():
@@ -74,13 +74,13 @@ def sync_interfaces(nb, device_nb, device_conn):
                             'new': v,
                         }
                         curr_nb_obj.type = v
-                elif k == 'parent':
+                elif k in ['bridge','lag','parent']:
+                    logger.info("Processing a parent parameter '{0}' => {1}/{2}".format(curr_dev_interface['name'], k,v))
                     if v:
                         nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
                         new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
                         new_parent = nb_parent_interfaces[0].id
-                    else:
-                        # Its None
+                    else: # The parent interface is None
                         new_parent_desc = "{0}".format(v)
 
                     if curr_nb_obj.parent:
@@ -100,10 +100,9 @@ def sync_interfaces(nb, device_nb, device_conn):
                         'new': v,
                     }
                     setattr(curr_nb_obj, k, v)
-                    
 
             if changed:
-                logger.debug("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, changed))
+                logger.info("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, changed))
                 curr_nb_obj.save()
         else:
             # Create
@@ -111,9 +110,7 @@ def sync_interfaces(nb, device_nb, device_conn):
                 # Type is mandatory
                 cleaned_params['type'] = 'other'
 
-            if 'parent' in cleaned_params:
-                # Parent needs to be converted from the name to its id.
-                if cleaned_params['parent'] != None:
+            if 'parent' in cleaned_params and cleaned_params['parent'] != None:
                     nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params['parent'])
                     try:
                         cleaned_params['parent'] = nb_parent_interfaces[0].id
@@ -139,9 +136,11 @@ def sync_ips(nb, device_nb, device_conn) -> None:
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
     dev_ips = device_conn.get_ipaddresses()
-    logger.debug("IP data for '{0}'\n{1}".format(device_nb.name, pprint.pformat(dev_ips, width=200)))
+    logger.debug("Raw IP data for '{0}'\n{1}".format(device_nb.name, pprint.pformat(dev_ips, width=200)))
 
     # We need the interfaces to map the interface name to the netbox id.
+    nb_ipaddresses = nb.ipam.ip_addresses.filter(device=device_nb.name)
+    nb_ipaddresses_dict = {ipaddress.ip_interface(v.address):v for v in nb_ipaddresses}
     nb_interfaces = nb.dcim.interfaces.filter(device=device_nb.name)
     nb_interface_dict = {v.name:v for v in nb_interfaces}
 
@@ -161,7 +160,7 @@ def sync_ips(nb, device_nb, device_conn) -> None:
             )
 
         if nb_ip_record := nb.ipam.ip_addresses.filter(address=curr_ip['address']):
-            # Update
+            logger.debug("Checking IP record for changes: {0}".format(curr_ip))
             if len(nb_ip_record) == 1:
                 changed = False
 
@@ -186,7 +185,6 @@ def sync_ips(nb, device_nb, device_conn) -> None:
                 logger.error("Multiple IPs found for: {0}".format(curr_ip['address']))
                 continue
         else:
-            # Create
             logger.info("Creating IP record: {0}".format(curr_ip))
             nb.ipam.ip_addresses.create(
                 assigned_object_id=nb_interface_dict[curr_ip['interface']].id,
@@ -195,6 +193,12 @@ def sync_ips(nb, device_nb, device_conn) -> None:
                 status=curr_ip['status'],
                 vrf=curr_ip['vrf'],
             )
+
+    # Now we need to check for those that need to be removed from netbox
+    to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x['address'], dev_ips)))
+    for curr_to_del in to_del:
+        logger.info("Deleting IP record: {0}".format(nb_ipaddresses_dict[curr_to_del]))
+        nb_ipaddresses_dict[curr_to_del].delete()
 
     return
 
@@ -213,7 +217,7 @@ def main() -> None:
 
     # How best to make this dynamic (likely factory method)
     platform_to_driver = {
-        'JunOS':    drivers.junos.JunOS,
+        # 'JunOS':    drivers.junos.JunOS,
         'RouterOS': drivers.routeros.RouterOS,
     }
 
@@ -225,7 +229,9 @@ def main() -> None:
     devices = nb.dcim.devices.all()
 
     for device_nb in devices:
-        logger.info("Processing device: {0:04}/{1} => {2} => {3}".format(device_nb.id, device_nb.name, device_nb.platform, device_nb.primary_ip))
+        logger.info("Processing device: {0:04}/{1} => {2} => {3}".format(
+            device_nb.id, device_nb.name, device_nb.platform,
+            device_nb.primary_ip))
 
         if device_nb.platform is None:
             continue
@@ -234,9 +240,6 @@ def main() -> None:
             driver = platform_to_driver[str(device_nb.platform)]
         except KeyError:
             logger.error("Unsupported platform '{0}'".format(device_nb.platform))
-            continue
-
-        if str(device_nb.platform) not in ['RouterOS']:
             continue
 
         # if device_nb.name not in []:

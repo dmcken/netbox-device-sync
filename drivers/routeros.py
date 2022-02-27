@@ -30,7 +30,12 @@ class RouterOS(drivers.base.driver_base):
         'eoip':   'virtual',
         'ether':  None,        # Most will already be defined by the templates
         'vlan':   'virtual',
+        'vrrp':   'virtual',
     }
+    _parent_types = [
+        'lag',
+        'bridge',
+    ]
 
     def _connect(self, **kwargs) -> None:
         '''
@@ -41,8 +46,8 @@ class RouterOS(drivers.base.driver_base):
             # kwargs['login_method'] = librouteros.login.plain
             logger.debug("Attempting to connect to RouterOS device: {0}".format(kwargs))
             self._dev = librouteros.connect(**kwargs)
-        except socket.timeout:
-            raise drivers.base.ConnectError()
+        except socket.timeout as e:
+            raise drivers.base.ConnectError() from e
 
     def _close(self,):
         if self._dev:
@@ -50,17 +55,36 @@ class RouterOS(drivers.base.driver_base):
         del self._dev
 
     def get_interfaces(self):
+        
+        rez_parent_interfaces = []
         rez_interfaces = []
+
+        # 1-to-1 mappings
+        bridge_ports = list(self._dev.path('interface','bridge','port'))
+        bridge_ports_slave_dict = {v['interface']:v for v in bridge_ports}
+
+        vlan_ints = list(self._dev.path('interface','vlan'))
+        vlan_ints_parent_dict = {v['name']:v for v in vlan_ints}
+
+        vrrp_ints = list(self._dev.path('interface','vrrp'))
+        vrrp_ints_slave_dict = {v['name']:v for v in vrrp_ints}
+
+        # 1-to-many mappings
+        lag_ints = list(self._dev.path('interface','bonding'))
+        lag_ints_slave_dict = {}
+        for curr_lag in lag_ints:
+            for curr_slave in curr_lag['slaves'].split(','):
+                lag_ints_slave_dict[curr_slave] = curr_lag
+
 
         ros_interfaces = list(self._dev.path('interface'))
 
         for curr_interface in ros_interfaces:
-            interface_rec = {}
+            logger.debug("Interface data: {0}".format(pprint.pformat(curr_interface)))
+            interface_rec = {
+                'name': curr_interface['name'],
+            }
 
-            #logger.debug("Inteface data: {0}".format(pprint.pformat(ros_interfaces)))
-
-            # Mandatory fields
-            interface_rec['name']        = curr_interface['name']
             try:
                 interface_rec['mac_address'] = curr_interface['mac-address']
             except KeyError:
@@ -77,7 +101,7 @@ class RouterOS(drivers.base.driver_base):
                 # ))                  
 
             try:
-                interface_rec['description'] = curr_interface['name']
+                interface_rec['description'] = curr_interface['comment']
             except KeyError:
                 interface_rec['description'] = None
 
@@ -87,9 +111,26 @@ class RouterOS(drivers.base.driver_base):
             except KeyError:
                 interface_rec['type'] = None
 
-            rez_interfaces.append(interface_rec)
+            # Make sure we have the parents created first.
+            if interface_rec['type'] in self._parent_types:
+                rez_parent_interfaces.append(interface_rec)
+            else:
+                # Handle the parent relationships
+                if interface_rec['name'] in bridge_ports_slave_dict:
+                    interface_rec['bridge'] = bridge_ports_slave_dict[interface_rec['name']]['bridge']
 
-        return rez_interfaces
+                if interface_rec['name'] in lag_ints_slave_dict:
+                    interface_rec['lag'] = lag_ints_slave_dict[interface_rec['name']]['name']
+
+                if interface_rec['name'] in vlan_ints_parent_dict:
+                    interface_rec['parent'] = vlan_ints_parent_dict[interface_rec['name']]['interface']
+
+                if interface_rec['name'] in vrrp_ints_slave_dict:
+                    interface_rec['parent'] = vrrp_ints_slave_dict[interface_rec['name']]['interface']
+
+                rez_interfaces.append(interface_rec)
+
+        return rez_parent_interfaces + rez_interfaces
 
     def get_ipaddresses(self):
 
