@@ -8,7 +8,7 @@ class ConnectError(Exception):
     pass
 
 
-class driver_base(metaclass = abc.ABCMeta):
+class DriverBase(metaclass = abc.ABCMeta):
     '''
 
     Protocols:

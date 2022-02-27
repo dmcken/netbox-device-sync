@@ -16,7 +16,7 @@ import utils
 
 logger = logging.getLogger(__name__)
 
-class JunOS(drivers.base.driver_base):
+class JunOS(drivers.base.DriverBase):
 
     _connect_params = {
         'hostname': {'dest': 'host'},

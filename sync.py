@@ -216,7 +216,7 @@ def main() -> None:
 
     # How best to make this dynamic (likely factory method)
     platform_to_driver = {
-        # 'JunOS':    drivers.junos.JunOS,
+        'JunOS':    drivers.junos.JunOS,
         'RouterOS': drivers.routeros.RouterOS,
     }
 
