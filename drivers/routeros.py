@@ -12,7 +12,7 @@ import utils
 
 logger = logging.getLogger(__name__)
 
-class RouterOS(drivers.base.driver_base):
+class RouterOS(drivers.base.DriverBase):
     '''
     RouterOS device driver
     '''
