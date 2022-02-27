@@ -101,7 +101,7 @@ class RouterOS(drivers.base.DriverBase):
                 # ))                  
 
             try:
-                interface_rec['description'] = curr_interface['comment']
+                interface_rec['description'] = curr_interface['comment'].strip()
             except KeyError:
                 interface_rec['description'] = None
 
