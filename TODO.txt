@@ -1,0 +1,4 @@
+
+
+# Automatic registration of new drivers.
+# Document requirements for drivers.
