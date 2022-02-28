@@ -86,11 +86,11 @@ class JunOS(drivers.base.DriverBase):
 
             self._dev = jnpr.junos.Device(**kwargs)
             self._dev.open(normalize=True)
-        except jnpr.junos.exception.ConnectError:
-            raise drivers.base.ConnectError()
-        except Exception as err:
-            logger.error("General connection error: {0}".format(err))
-            raise err
+        except jnpr.junos.exception.ConnectError as e:
+            raise drivers.base.ConnectError() from e
+        except Exception as e:
+            logger.error("General connection error: {0}".format(e))
+            raise e from e
 
     def _close(self,):
         if self._dev:
@@ -119,6 +119,7 @@ class JunOS(drivers.base.DriverBase):
         
 
         '''
+        # TODO: Simplify and split up
         # TODO: lag slaves are not setup atm
 
 
@@ -130,51 +131,45 @@ class JunOS(drivers.base.DriverBase):
         rez = self._dev.rpc.get_interface_information()
         int_dict = xmltodict.parse(etree.tostring(rez))
         for curr_int in int_dict['interface-information']['physical-interface']:
-
+            # Interfaces to ignore.
             if re.match(self._interfaces_to_ignore_regex, curr_int['name']):
                 continue
 
             #logger.debug("Processing interface:\n{0}".format(pprint.pformat(curr_int, width=200)))
+            interface_dict = {
+                'name': "{0}".format(curr_int['name'])
+            }
 
             try:
-                interface_description = curr_int['description']
+                interface_dict['description'] = curr_int['description']
             except KeyError:
-                interface_description = None
+                interface_dict['description'] = None
 
             try:
-                interface_mac = curr_int['current-physical-address']
-                if isinstance(interface_mac, collections.OrderedDict):
-                    interface_mac = interface_mac['#text']
+                interface_dict['mac_address'] = curr_int['current-physical-address']
+                if isinstance(interface_dict['mac_address'], collections.OrderedDict):
+                    interface_dict['mac_address'] = interface_dict['mac_address']['#text']
             except KeyError:
-                interface_mac = None
+                interface_dict['mac_address'] = None
 
             try:
-                interface_mtu = int(curr_int['mtu'])
+                interface_dict['mtu'] = int(curr_int['mtu'])
             except ValueError:
-                interface_mtu = None
+                interface_dict['mtu'] = None
             except KeyError:
                 logger.error("Missing MTU for interface: {0}".format(curr_int))
-                interface_mtu = None
+                interface_dict['mtu'] = None
 
             # Lag interfaces interfaces
             if re.match('ae[0-9]+', curr_int['name']):
-                parent_interfaces.append({
-                    'name': "{0}".format(curr_int['name']),
-                    'mtu':  interface_mtu,
-                    'type': 'lag',
-                    'description': interface_description,
-                    'mac_address':  interface_mac,
-                })
+                interface_dict['type'] = 'lag'
+                parent_interfaces.append(interface_dict)
             #TODO: Handle bridge interfaces
             else: # Every other type of interface
-                # 'if-type', 'GRE' - for GRE interfaces
-                normal_interfaces.append({
-                    'name': "{0}".format(curr_int['name']),
-                    'mtu':  interface_mtu,
-                    'type': None,
-                    'description': interface_description,
-                    'mac_address': interface_mac,
-                })
+                interface_dict['type'] = None
+                normal_interfaces.append(interface_dict)
+            
+            # Now to handle all logical instances (units in JunOS parlance).
             if 'logical-interface' in curr_int:
                 
                 # In the case of a single unit it is a direct OrderedDict vs list of OrderedDict
@@ -211,23 +206,22 @@ class JunOS(drivers.base.DriverBase):
                             address_family_list = [curr_logical_int['address-family']]
                     except KeyError:
                         # No address families under the unit, why?
+                        # Log and handle errors
                         continue
 
                     for curr_address_family in address_family_list:
 
                         try:
                             address_family_mtu = int(curr_address_family['mtu'])
-                        except ValueError:
-                            address_family_mtu = 0
-                        except KeyError:
+                        except (ValueError, KeyError):
                             address_family_mtu = 0
                             
                         if address_family_mtu > unit_mtu:
                             unit_mtu = address_family_mtu
 
-                    # Seems for the ethernet-switching family the MTU is 0
+                    # Seems for the ethernet-switching family the MTU returned is 0
                     if unit_mtu == 0:
-                        unit_mtu = interface_mtu
+                        unit_mtu = interface_dict['mtu']
 
                     interface_units.append({
                         'name': "{0}".format(curr_logical_int['name']),
@@ -237,6 +231,12 @@ class JunOS(drivers.base.DriverBase):
                         'description': unit_descripion,
                         'parent': '{0}'.format(curr_int['name']),
                     })
+
+        int_filter = '<configuration><interfaces/><protocols/></configuration>'
+        dev_config = self._dev.rpc.get_config(filter_xml=int_filter, options={'database' : 'committed'})
+        config_dict = xmltodict.parse(etree.tostring(dev_config))
+
+        # From the config we can fetch the layer 2 info (lags and vlan config)
 
         # This ordering is important
         # We are creating certain parent interfaces like aeX, lo0 first
