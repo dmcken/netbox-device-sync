@@ -38,13 +38,13 @@ def sync_interfaces(nb, device_nb, device_conn):
     nb_interfaces_names = set(map(lambda x: x.name, nb_interfaces))
     dev_interfaces = device_conn.get_interfaces()
     dev_interfaces_names = set(map(lambda x: x['name'], dev_interfaces))
-    logger.debug("Interface data for '{0}'\n{1}".format(device_nb.name,
-        pprint.pformat(dev_interfaces, width=200)))
+    #logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
+    #    pprint.pformat(dev_interfaces, width=200)))
 
     to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
     to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
-    logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
+    #logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
 
     for curr_dev_interface in dev_interfaces:
 
@@ -104,20 +104,21 @@ def sync_interfaces(nb, device_nb, device_conn):
                 logger.info("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, changed))
                 curr_nb_obj.save()
         else:
-            # Create
+            # Create interface
             if 'type' not in cleaned_params:
                 # Type is mandatory
                 cleaned_params['type'] = 'other'
 
-            if 'parent' in cleaned_params and cleaned_params['parent'] != None:
-                    nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params['parent'])
-                    try:
-                        cleaned_params['parent'] = nb_parent_interfaces[0].id
-                    except (KeyError,AttributeError):
-                        logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, cleaned_params['parent']))
-                        cleaned_params['parent'] = None
+            for master_interface in ['bridge','lag','parent']:
+                if master_interface in cleaned_params and cleaned_params[master_interface] != None:
+                        nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params[master_interface])
+                        try:
+                            cleaned_params[master_interface] = nb_parent_interfaces[0].id
+                        except (KeyError,AttributeError):
+                            logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, cleaned_params[master_interface]))
+                            cleaned_params[master_interface] = None
 
-            logger.debug("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
+            logger.info("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
             nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
             #TODO: Error checking?
 
