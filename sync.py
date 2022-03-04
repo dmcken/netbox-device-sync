@@ -82,8 +82,9 @@ def sync_interfaces(nb, device_nb, device_conn):
                     else: # The parent interface is None
                         new_parent_desc = "{0}".format(v)
 
-                    if curr_nb_obj.parent:
-                        old_parent_desc = "{0}/{1}".format(curr_nb_obj.parent.id, nb_parent_interfaces[0].name)
+                    
+                    if k_attr := getattr(curr_nb_obj, k):
+                        old_parent_desc = "{0}/{1}".format(k_attr.id, nb_parent_interfaces[0].name)
                     else:
                         old_parent_desc = "None"
 
@@ -216,6 +217,8 @@ def main() -> None:
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
 
     # How best to make this dynamic (likely factory method)
+    # Drivers for use to fetch the data from devices:
+    # - EdgeRouter
     platform_to_driver = {
         'JunOS':    drivers.junos.JunOS,
         'RouterOS': drivers.routeros.RouterOS,
@@ -259,28 +262,25 @@ def main() -> None:
             logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
             continue
 
-        # Now to sync the data
-        sync_interfaces(nb, device_nb, device_conn)
-        sync_ips(nb, device_nb, device_conn)
+        try:
+            # Now to sync the data
+            sync_interfaces(nb, device_nb, device_conn)
+            sync_ips(nb, device_nb, device_conn)
 
-        # sync_vlans()
-        # sync_routes(nb, device_nb, device_conn)
-        # sync_neighbours(nb, device_nb, device_conn)
-
-
+            # sync_vlans()
+            # sync_routes(nb, device_nb, device_conn)
+            # sync_neighbours(nb, device_nb, device_conn)
+        except Exception as e:
+            logger.error("There was an error syncing '{2}': {0}, {1}".format(e.__class__, e, device_ip))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+        
         # To Sync
         # - Vlans - Only for devices in charge of the vlan domain
         # - Static routes - Use to update prefixes
         # - Neighbour data (LLDP / CDP) - For building neighbour relations and rough cable plant.
-        # 
-        # Drivers for use to fetch the data from devices:
-        # - Mikrotik
-        # - JunOS
-        # - EdgeRouter
 
         del device_conn
-
-        #logger.info("Completed processing")
 
     logger.info("Done")
 
