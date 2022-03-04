@@ -50,9 +50,12 @@ class RouterOS(drivers.base.DriverBase):
             raise drivers.base.ConnectError() from e
 
     def _close(self,):
-        if self._dev:
-            self._dev.close()
-        del self._dev
+        try:
+            if self._dev:
+                self._dev.close()
+            del self._dev
+        except AttributeError:
+            pass
 
     def get_interfaces(self):
         
@@ -91,9 +94,12 @@ class RouterOS(drivers.base.DriverBase):
                 interface_rec['mac_address'] = None
 
             try:
-                interface_rec['mtu']  = int(curr_interface['mtu'])
+                interface_rec['mtu'] = int(curr_interface['mtu'])
             except ValueError:
                 interface_rec['mtu'] = int(curr_interface['actual-mtu'])
+            except KeyError:
+                logger.error("Missing MTU for interface: {0}".format(curr_interface['name']))
+                interface_rec['mtu'] = None
 
                 # logger.error("Invalid MTU '{0}' on {1}".format(
                 #     curr_interface['mtu'],
