@@ -188,6 +188,23 @@ class JunOS(drivers.base.DriverBase):
                         # e.g. xe-0/0/0.5 is created automatically for ae0.5 if xe-0/0/0 is a 
                         # slave of ae0.
                         if curr_logical_int['address-family']['address-family-name'] in ['aenet']:
+                            '''
+                            So via the 'show interfaces' output (be it terse, extensive, etc) there is
+                            no output that explicitly lists the lag parent interface that we wish
+                            to map in netbox.
+
+                            e.g. data from curr_logical_int['address-family']['address-family-name']
+                            OrderedDict([('address-family-name', 'aenet'), ('ae-bundle-name', 'ae0.0')])
+
+                            e.g. output of 'show interfaces terse'
+                            xe-1/2/2                up    up
+                            xe-1/2/2.1              up    up   aenet    --> ae6.1
+
+                            So we will have to look at the sub-interfaces
+                            '''
+                            #logger.error("LAG sub-interface: {0}".format(curr_logical_int['address-family']))
+                            primary_lag_int,_ = curr_logical_int['address-family']['ae-bundle-name'].rsplit('.',maxsplit=1)
+                            interface_dict['lag'] = primary_lag_int
                             continue
                     except (KeyError,TypeError):
                         pass
