@@ -120,7 +120,12 @@ def sync_interfaces(nb, device_nb, device_conn):
                             cleaned_params[master_interface] = None
 
             logger.info("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
-            nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
+            try:
+                nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
+            except pynetbox.core.query.RequestError as e:
+                logger.error("Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
             #TODO: Error checking?
 
     # Delete extra interfaces
@@ -180,7 +185,7 @@ def sync_ips(nb, device_nb, device_conn) -> None:
                     changed = True
 
                 if changed:
-                    logger.info("Updating IP record: {0}".format(curr_ip))
+                    logger.info("Updating IP record: {0} -> {1}".format(curr_ip, changed))
                     nb_ip_record[0].save()
             else:
                 logger.error("Multiple IPs found for: {0}".format(curr_ip['address']))
