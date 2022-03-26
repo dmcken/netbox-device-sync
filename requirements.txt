@@ -1,5 +1,6 @@
 # Core
 pynetbox
+python-dotenv
 xmltodict
 
 # Drivers
