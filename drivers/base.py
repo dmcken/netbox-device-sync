@@ -7,6 +7,10 @@ logger = logging.getLogger(__name__)
 class ConnectError(Exception):
     pass
 
+class DriverFactory(object):
+    # 
+    pass
+
 
 class DriverBase(metaclass = abc.ABCMeta):
     '''
