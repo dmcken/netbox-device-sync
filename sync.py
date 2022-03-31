@@ -76,9 +76,15 @@ def sync_interfaces(nb, device_nb, device_conn):
                         curr_nb_obj.type = v
                 elif k in ['bridge','lag','parent']:
                     if v:
-                        nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
-                        new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
-                        new_parent = nb_parent_interfaces[0].id
+                        try:
+                            nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                            new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
+                            new_parent = nb_parent_interfaces[0].id
+                        except IndexError:
+                            logger.error("Could not look up parent interface for '{0}".format(
+                                curr_dev_interface
+                            ))
+                            continue
                     else: # The parent interface is None
                         new_parent_desc = "{0}".format(v)
 
@@ -115,7 +121,7 @@ def sync_interfaces(nb, device_nb, device_conn):
                         nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params[master_interface])
                         try:
                             cleaned_params[master_interface] = nb_parent_interfaces[0].id
-                        except (KeyError,AttributeError):
+                        except (IndexError, KeyError, AttributeError):
                             logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, cleaned_params[master_interface]))
                             cleaned_params[master_interface] = None
 
@@ -218,7 +224,7 @@ def main() -> None:
     logging.getLogger('ncclient').setLevel(logging.ERROR)
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
-    logging.getLogger('drivers.routeros').setLevel(logging.ERROR)
+    #logging.getLogger('drivers.routeros').setLevel(logging.DEBUG)
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
 
     # How best to make this dynamic (likely factory method)
