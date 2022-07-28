@@ -129,6 +129,9 @@ def sync_interfaces(nb, device_nb, device_conn):
             try:
                 nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
             except pynetbox.core.query.RequestError as e:
+                logger.error("Netbox API Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
+                continue
+            except Exception as e:
                 logger.error("Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
@@ -138,6 +141,51 @@ def sync_interfaces(nb, device_nb, device_conn):
     nb_interfaces_to_delete = filter(lambda x: x.name in to_delete_from_nb, nb_interfaces)
     for curr_int_to_delete in nb_interfaces_to_delete:
         curr_int_to_delete.delete()
+
+    return
+
+def create_ip_address(nb, curr_ip, nb_interface_dict) -> None:
+    logger.info("Creating IP record: {0}".format(curr_ip))
+    nb.ipam.ip_addresses.create(
+        assigned_object_id=nb_interface_dict[curr_ip['interface']].id,
+        assigned_object_type='dcim.interface',
+        address=str(curr_ip['address']),
+        status=curr_ip['status'],
+        vrf=curr_ip['vrf'],
+    )
+    return
+
+def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
+    logger.debug("Checking IP record for changes: {0}".format(curr_ip))
+    if len(nb_ip_record) == 1:
+        changed = False
+
+        if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip['interface']].id or \
+            nb_ip_record[0].assigned_object_type != 'dcim.interface':
+            logger.info("Updating IP interface from '{2}': {0} -> {1}".format(
+                nb_ip_record[0].assigned_object_id,
+                nb_interface_dict[curr_ip['interface']].id,
+                nb_ip_record[0].assigned_object_type,
+            ))
+            nb_ip_record[0].assigned_object_id = nb_interface_dict[curr_ip['interface']].id
+            nb_ip_record[0].assigned_object_type = 'dcim.interface'
+            changed = True
+
+        if nb_ip_record[0].status.value != curr_ip['status']:
+            logger.info("Updating status: {0} -> {1}".format(nb_ip_record[0].status.value, curr_ip['status']))
+            nb_ip_record[0].status = curr_ip['status']
+            changed = True
+
+        if nb_ip_record[0].vrf != curr_ip['vrf']:
+            nb_ip_record[0].vrf = curr_ip['vrf']
+            logger.info("Updating vrf")
+            changed = True
+
+        if changed:
+            logger.info("Updating IP record: {0} -> {1}".format(curr_ip, changed))
+            nb_ip_record[0].save()
+    else:
+        logger.error("Multiple IPs found for: {0}".format(curr_ip['address']))
 
     return
 
@@ -155,9 +203,10 @@ def sync_ips(nb, device_nb, device_conn) -> None:
     nb_ipaddresses_dict = {ipaddress.ip_interface(v.address):v for v in nb_ipaddresses}
     nb_interfaces = nb.dcim.interfaces.filter(device=device_nb.name)
     nb_interface_dict = {v.name:v for v in nb_interfaces}
+    nb_interface_id_list = list(map(lambda x: x.id, nb_interfaces))
 
     for curr_ip in dev_ips:
-        # logger.debug("Processing IP address: {0}".format(curr_ip))
+        logger.debug("Processing IP address: {0}".format(curr_ip))
         if curr_ip['interface'] not in nb_interface_dict:
             logger.error("Missing interface for IP: {0}".format(curr_ip))
             continue
@@ -171,40 +220,16 @@ def sync_ips(nb, device_nb, device_conn) -> None:
                 status='active',
             )
 
+        
         if nb_ip_record := nb.ipam.ip_addresses.filter(address=curr_ip['address']):
-            logger.debug("Checking IP record for changes: {0}".format(curr_ip))
-            if len(nb_ip_record) == 1:
-                changed = False
-
-                if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip['interface']].id or \
-                   nb_ip_record[0].assigned_object_type != 'dcim.interface':
-                    nb_ip_record[0].assigned_object_id = nb_interface_dict[curr_ip['interface']].id
-                    nb_ip_record[0].assigned_object_type = 'dcim.interface'
-                    changed = True
-
-                if nb_ip_record[0].status.value != curr_ip['status']:
-                    nb_ip_record[0].status = curr_ip['status']
-                    changed = True
-
-                if nb_ip_record[0].vrf != curr_ip['vrf']:
-                    nb_ip_record[0].vrf = curr_ip['vrf']
-                    changed = True
-
-                if changed:
-                    logger.info("Updating IP record: {0} -> {1}".format(curr_ip, changed))
-                    nb_ip_record[0].save()
+            # We only want to update if its on the same device.
+            if nb_ip_record[0].assigned_object_type == 'dcim.interface' \
+                and nb_ip_record[0].assigned_object_id in nb_interface_id_list:
+                update_ip_address(curr_ip, nb_ip_record, nb_interface_dict)
             else:
-                logger.error("Multiple IPs found for: {0}".format(curr_ip['address']))
-                continue
+                create_ip_address(nb, curr_ip, nb_interface_dict)
         else:
-            logger.info("Creating IP record: {0}".format(curr_ip))
-            nb.ipam.ip_addresses.create(
-                assigned_object_id=nb_interface_dict[curr_ip['interface']].id,
-                assigned_object_type='dcim.interface',
-                address=str(curr_ip['address']),
-                status=curr_ip['status'],
-                vrf=curr_ip['vrf'],
-            )
+            create_ip_address(nb, curr_ip, nb_interface_dict)
 
     # Now we need to check for those that need to be removed from netbox
     to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x['address'], dev_ips)))
@@ -245,9 +270,13 @@ def main() -> None:
     for device_nb in devices:
         logger.info("Processing device: {0:04}/{1} => {2} => {3}".format(
             device_nb.id, device_nb.name, device_nb.platform,
-            device_nb.primary_ip))
+            device_nb.primary_ip,
+        ))
 
         if device_nb.platform is None:
+            continue
+
+        if device_nb.status.value not in ['active']:
             continue
 
         try:
