@@ -16,6 +16,7 @@ import traceback
 
 # Local imports
 import config
+import drivers.edgeos
 import drivers.junos
 import drivers.routeros
 import utils
@@ -256,8 +257,9 @@ def main() -> None:
     # Drivers for use to fetch the data from devices:
     # - EdgeRouter
     platform_to_driver = {
-        'JunOS':    drivers.junos.JunOS,
-        'RouterOS': drivers.routeros.RouterOS,
+        'JunOS':            drivers.junos.JunOS,
+        'RouterOS':         drivers.routeros.RouterOS,
+        'Ubiquiti EdgeOS':  drivers.edgeos.EdgeOS,
     }
 
     nb = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
