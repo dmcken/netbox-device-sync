@@ -237,7 +237,7 @@ def sync_ips(nb, device_nb, device_conn) -> None:
     # Now we need to check for those that need to be removed from netbox
     to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x['address'], dev_ips)))
     for curr_to_del in to_del:
-        logger.info("Deleting IP record: {0}".format(nb_ipaddresses_dict[curr_to_del]))
+        logger.info(f"Deleting IP record: {nb_ipaddresses_dict[curr_to_del].id}/{nb_ipaddresses_dict[curr_to_del].address}")
         nb_ipaddresses_dict[curr_to_del].delete()
 
     return
