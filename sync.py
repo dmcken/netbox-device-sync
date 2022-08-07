@@ -78,7 +78,7 @@ def sync_interfaces(nb, device_nb, device_conn):
                 elif k in ['bridge','lag','parent']:
                     if v:
                         try:
-                            nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                            nb_parent_interfaces = list(nb.dcim.interfaces.filter(device=device_nb.name,name=v))
                             new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
                             new_parent = nb_parent_interfaces[0].id
                         except IndexError:
@@ -119,7 +119,7 @@ def sync_interfaces(nb, device_nb, device_conn):
 
             for master_interface in ['bridge','lag','parent']:
                 if master_interface in cleaned_params and cleaned_params[master_interface] != None:
-                        nb_parent_interfaces = nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params[master_interface])
+                        nb_parent_interfaces = list(nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params[master_interface]))
                         try:
                             cleaned_params[master_interface] = nb_parent_interfaces[0].id
                         except (IndexError, KeyError, AttributeError):
