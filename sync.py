@@ -222,7 +222,7 @@ def sync_ips(nb, device_nb, device_conn) -> None:
             )
 
         
-        if nb_ip_record := nb.ipam.ip_addresses.filter(address=curr_ip['address']):
+        if nb_ip_record := list(nb.ipam.ip_addresses.filter(address=curr_ip['address'])):
             # We only want to update if its on the same device.
             if nb_ip_record[0].assigned_object_type == 'dcim.interface' \
                 and nb_ip_record[0].assigned_object_id in nb_interface_id_list:
