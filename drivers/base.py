@@ -1,5 +1,9 @@
+'''Base classes for all device drivers.
 
+'''
+# System imports
 import abc
+import ipaddress
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,6 +34,10 @@ class DriverBase(metaclass = abc.ABCMeta):
     - password
     - key_file
     '''
+    _addresses_to_ignore = [
+        ipaddress.ip_interface('127.0.0.1/8'),
+        ipaddress.ip_interface('::1/128'),
+    ]
     _connect_params = {}
     _connection = None
 
