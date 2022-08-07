@@ -202,9 +202,9 @@ def sync_ips(nb, device_nb, device_conn) -> None:
     logger.debug("Raw IP data for '{0}'\n{1}".format(device_nb.name, pprint.pformat(dev_ips, width=200)))
 
     # We need the interfaces to map the interface name to the netbox id.
-    nb_ipaddresses = nb.ipam.ip_addresses.filter(device=device_nb.name)
+    nb_ipaddresses = list(nb.ipam.ip_addresses.filter(device=device_nb.name))
     nb_ipaddresses_dict = {ipaddress.ip_interface(v.address):v for v in nb_ipaddresses}
-    nb_interfaces = nb.dcim.interfaces.filter(device=device_nb.name)
+    nb_interfaces = list(nb.dcim.interfaces.filter(device=device_nb.name))
     nb_interface_dict = {v.name:v for v in nb_interfaces}
     nb_interface_id_list = list(map(lambda x: x.id, nb_interfaces))
 
