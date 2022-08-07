@@ -46,8 +46,11 @@ class RouterOS(drivers.base.DriverBase):
             # kwargs['login_method'] = librouteros.login.plain
             logger.debug("Attempting to connect to RouterOS device: {0}".format(kwargs))
             self._dev = librouteros.connect(**kwargs)
-        except socket.timeout as e:
-            raise drivers.base.ConnectError() from e
+        except librouteros.exceptions.TrapError as exc:
+            # TODO: Check for specific message 'invalid user name or password (6)'
+            raise drivers.base.AuthenticationError() from exc
+        except socket.timeout as exc:
+            raise drivers.base.ConnectError() from exc
 
     def _close(self,):
         try:
