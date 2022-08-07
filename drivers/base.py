@@ -5,6 +5,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ConnectError(Exception):
+    '''General error if we can't connect'''
+    pass
+
+class AuthenticationError(Exception):
+    '''Thrown if auhentiction to a device fails'''
     pass
 
 class DriverFactory(object):
@@ -30,6 +35,9 @@ class DriverBase(metaclass = abc.ABCMeta):
 
     def __init__(self, **kwargs) -> None:
         
+        # This cache is for storing data in the drivers between calls
+        self._cache = {}
+
         # Parse the device connection parameters
         creds = {}
         for k,v in self._connect_params.items():
