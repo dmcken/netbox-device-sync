@@ -196,7 +196,9 @@ def sync_ips(nb, device_nb, device_conn) -> None:
     '''
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
+    link_local = ipaddress.ip_network('FE80::/10')
     dev_ips = device_conn.get_ipaddresses()
+    dev_ips = list(filter(lambda x: x['address'] not in link_local, dev_ips))
     logger.debug("Raw IP data for '{0}'\n{1}".format(device_nb.name, pprint.pformat(dev_ips, width=200)))
 
     # We need the interfaces to map the interface name to the netbox id.
