@@ -246,11 +246,12 @@ def main() -> None:
 
     BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     # Upstream libraries
-    logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     logging.getLogger('ncclient').setLevel(logging.ERROR)
+    logging.getLogger('paramiko.transport').setLevel(logging.ERROR)
+    logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
-    #logging.getLogger('drivers.routeros').setLevel(logging.DEBUG)
+    logging.getLogger('drivers.edgeos').setLevel(logging.DEBUG)
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
 
     # How best to make this dynamic (likely factory method)
