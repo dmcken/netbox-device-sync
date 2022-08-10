@@ -289,10 +289,10 @@ class EdgeOS(drivers.base.DriverBase):
 
         # Cache data
         self._cache['show-interfaces-parsed'] = interface_list
-        for curr_interface in interface_list:
-            if re.match(self._interfaces_to_ignore_regex, curr_interface['FullInterfaceName']):
-                continue
-            logger.debug(f"Interface data :\n{pprint.pformat(curr_interface, width=200)}")
+        # for curr_interface in interface_list:
+        #     if re.match(self._interfaces_to_ignore_regex, curr_interface['FullInterfaceName']):
+        #         continue
+        #     logger.debug(f"Interface data :\n{pprint.pformat(curr_interface, width=200)}")
         
         return self._cache['show-interfaces-parsed']
 
@@ -366,7 +366,7 @@ class EdgeOS(drivers.base.DriverBase):
                 interface_record['bridge'] = switch_ports[interface_record['name']]
 
             interfaces.append(interface_record)
-            logger.debug(f"Interface: {interface_record}")
+            # logger.debug(f"Interface: {interface_record}")
 
         return interfaces
 
@@ -398,6 +398,6 @@ class EdgeOS(drivers.base.DriverBase):
                     'vrf': None
                 }
                 address_list.append(address_rec)
-                logger.debug(f"Addresses: {address_rec}")
+                # logger.debug(f"Addresses: {address_rec}")
 
         return address_list
