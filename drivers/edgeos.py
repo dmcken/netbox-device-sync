@@ -160,7 +160,7 @@ class EdgeOS(drivers.base.DriverBase):
         logger.debug("Entered EdgeOS._parse_show_interfaces")
 
         FullInterfaceName = r'([A-Za-z0-9@\.]+)'
-        InterfaceStatusFlags = r'([\w,]+)'
+        InterfaceStatusFlags = r'([\w,-]+)'
         MTU = r'(\d+)'
         QDISC = r'(\w+)'
         InterfaceState = r'(\w+)'
@@ -241,6 +241,7 @@ class EdgeOS(drivers.base.DriverBase):
                 curr_interface['RX-mcast'] = int(parts[5])
                 position = 'root'
                 continue
+
             if position == 'TX-stats':
                 parts = curr_line.split()
                 curr_interface['TX-bytes'] = int(parts[0])
@@ -251,6 +252,7 @@ class EdgeOS(drivers.base.DriverBase):
                 curr_interface['TX-collisions'] = int(parts[5])
                 position = 'root'
                 continue
+
             if position == 'ipaddress':
                 curr_interface['Addresses'][-1]['Flags'] = curr_line.split()
                 position = 'root'
@@ -302,8 +304,6 @@ class EdgeOS(drivers.base.DriverBase):
         We don't get the type from the 'show interfaces' so we will map the
         devices outselves.
 
-
-
         '''
         logger.debug("Entered EdgeOS.get_interfaces")
         raw_interfaces = self._parse_show_interfaces()
@@ -328,8 +328,12 @@ class EdgeOS(drivers.base.DriverBase):
 
         for curr_int in raw_interfaces:
 
-            if re.match(self._interfaces_to_ignore_regex, curr_int['FullInterfaceName']):
-                continue
+            try:
+                if re.match(self._interfaces_to_ignore_regex, curr_int['FullInterfaceName']):
+                    continue
+            except KeyError:
+                logger.error(f"Key error - interface {pprint.pformat(curr_int)}")
+                raise
 
             interface_record = {}
             interface_record['name'] = curr_int['FullInterfaceName']
