@@ -7,3 +7,4 @@ xmltodict
 junos-eznc
 librouteros
 paramiko
+VyattaConfParser
