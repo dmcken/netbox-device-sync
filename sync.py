@@ -273,8 +273,23 @@ def main() -> None:
     devices = nb.dcim.devices.all()
 
     for device_nb in devices:
-        logger.info("Processing device: {0:04}/{1} => {2} => {3}".format(
-            device_nb.id, device_nb.name, device_nb.platform,
+        if device_nb.device_role.slug in [
+                'dh-txrx-receivers',
+                'generic',
+                'patch-panel',
+                'pdu',
+                'svr-transcoder',
+                'video-encoder',
+                'video-satellite-receiver',
+                'video-satellite-splitter',
+
+            ]:
+            continue
+
+        logger.info("Processing device: {0:04}/{1}/{2} => {3} => {4}".format(
+            device_nb.id, device_nb.name, 
+            device_nb.device_role.slug,
+            device_nb.platform,
             device_nb.primary_ip,
         ))
 
