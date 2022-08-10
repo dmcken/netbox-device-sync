@@ -14,6 +14,7 @@ import logging
 import pprint
 import re
 import socket
+import typing
 
 # External imports
 import paramiko
@@ -84,7 +85,7 @@ class EdgeOS(drivers.base.DriverBase):
         except AttributeError:
             pass
 
-    def _fetch_show_interfaces(self) -> list[str]:
+    def _fetch_show_interfaces(self) -> typing.List[str]:
         '''Fetch the output of 'show interfaces' with caching'''
 
         logger.debug("Entered EdgeOS._fetch_show_interfaces")
@@ -94,7 +95,7 @@ class EdgeOS(drivers.base.DriverBase):
         
         return self._cache['show-interfaces']
 
-    def _fetch_show_configuration(self) -> list[str]:
+    def _fetch_show_configuration(self) -> typing.List[str]:
         '''Fetch the output of 'show configuration' with caching'''
 
         logger.debug("Entered EdgeOS._fetch_show_interfaces")
