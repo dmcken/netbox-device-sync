@@ -205,6 +205,8 @@ class EdgeOS(drivers.base.DriverBase):
 
                 # Now lets clean the values
                 curr_interface['FullInterfaceName'] = res.group(1)
+                if curr_interface['FullInterfaceName'] in self._interfaces_to_ignore:
+                    continue
                 if curr_interface['FullInterfaceName'].find('@') != -1:
                     parts = curr_interface['FullInterfaceName'].split('@')
                     curr_interface['FullInterfaceName'] = parts[0]
