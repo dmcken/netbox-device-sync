@@ -1,4 +1,4 @@
-'''
+'''Device sync script.
 
 
 
@@ -253,7 +253,7 @@ def main() -> None:
     logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
-    logging.getLogger('drivers.edgeos').setLevel(logging.DEBUG)
+    logging.getLogger('drivers.edgeos').setLevel(logging.INFO)
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
 
     # How best to make this dynamic (likely factory method)
