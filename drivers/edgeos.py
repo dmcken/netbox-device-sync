@@ -354,7 +354,8 @@ class EdgeOS(drivers.base.DriverBase):
             try:
                 interface_record['mac_address'] = curr_int['MAC']
             except KeyError:
-                logger.error(f"MAC not set on interface {curr_int['FullInterfaceName']}")
+                if curr_int['FullInterfaceName'] not in ['lo']:
+                    logger.error(f"MAC not set on interface {curr_int['FullInterfaceName']}")
                 interface_record['mac_address'] = ''
 
             try:
