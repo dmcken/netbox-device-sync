@@ -40,6 +40,7 @@ class EdgeOS(drivers.base.DriverBase):
     }
 
     _interfaces_to_ignore = [
+        'dummy0',
         'itf',               # Seems to be linked to switch0 interface
         'itf0',
         'itf1',
@@ -127,6 +128,7 @@ class EdgeOS(drivers.base.DriverBase):
             'switch': 'switch',
             'npi': 'internal-ethernet',
             'imq': 'internal-offload',
+            'tun': 'virtual',
         }
 
         res = re.match('([A-Za-z0-9]+)\.([0-9]+)', interface_name)
@@ -354,7 +356,7 @@ class EdgeOS(drivers.base.DriverBase):
             try:
                 interface_record['mac_address'] = curr_int['MAC']
             except KeyError:
-                if curr_int['FullInterfaceName'] not in ['lo']:
+                if curr_int['FullInterfaceName'] not in ['lo','tun0',]:
                     logger.error(f"MAC not set on interface {curr_int['FullInterfaceName']}")
                 interface_record['mac_address'] = ''
 
