@@ -117,7 +117,7 @@ class EdgeOS(drivers.base.DriverBase):
         return self._cache['parsed-config']
 
     def _determine_interface_type(self, interface_name: str) -> str:
-        '''
+        '''Return a type for 
         '''
 
         type_map = {
@@ -127,6 +127,8 @@ class EdgeOS(drivers.base.DriverBase):
             'switch': 'switch',
             'npi': 'internal-ethernet',
             'imq': 'internal-offload',
+            'br': 'switch',
+            'itf': 'internal-ethernet',
         }
 
         res = re.match('([A-Za-z0-9]+)\.([0-9]+)', interface_name)
@@ -352,7 +354,9 @@ class EdgeOS(drivers.base.DriverBase):
             try:
                 interface_record['mac_address'] = curr_int['MAC']
             except KeyError:
-                logger.error(f"MAC not set on interface {curr_int['FullInterfaceName']}")
+                # The MAC is not set on EdgeOS devices loopback
+                if curr_int['FullInterfaceName'] not in ['lo']:
+                    logger.error(f"MAC not set on interface {curr_int['FullInterfaceName']}")
                 interface_record['mac_address'] = ''
 
             try:
