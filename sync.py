@@ -190,8 +190,8 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
 
     return
 
-def sync_ips(nb, device_nb, device_conn) -> None:
-    '''
+def sync_ips(nb_api, device_nb, device_conn) -> None:
+    '''Sync the IPs of a device.
 
     '''
 
@@ -199,40 +199,41 @@ def sync_ips(nb, device_nb, device_conn) -> None:
     link_local = ipaddress.ip_network('FE80::/10')
     dev_ips = device_conn.get_ipaddresses()
     dev_ips = list(filter(lambda x: x['address'] not in link_local, dev_ips))
-    logger.debug("Raw IP data for '{0}'\n{1}".format(device_nb.name, pprint.pformat(dev_ips, width=200)))
+    logger.debug(f"Raw IP data for '{device_nb.name}'\n" +
+                 f"{pprint.pformat(dev_ips, width=200)}")
 
     # We need the interfaces to map the interface name to the netbox id.
-    nb_ipaddresses = list(nb.ipam.ip_addresses.filter(device=device_nb.name))
+    nb_ipaddresses = list(nb_api.ipam.ip_addresses.filter(device=device_nb.name))
     nb_ipaddresses_dict = {ipaddress.ip_interface(v.address):v for v in nb_ipaddresses}
-    nb_interfaces = list(nb.dcim.interfaces.filter(device=device_nb.name))
+    nb_interfaces = list(nb_api.dcim.interfaces.filter(device=device_nb.name))
     nb_interface_dict = {v.name:v for v in nb_interfaces}
     nb_interface_id_list = list(map(lambda x: x.id, nb_interfaces))
 
     for curr_ip in dev_ips:
-        logger.debug("Processing IP address: {0}".format(curr_ip))
+        logger.debug(f"Processing IP address: {curr_ip}")
         if curr_ip['interface'] not in nb_interface_dict:
-            logger.error("Missing interface for IP: {0}".format(curr_ip))
+            logger.error(f"Missing interface for IP: {curr_ip}")
             continue
 
-        nb_ip_network = nb.ipam.prefixes.filter(prefix=str(curr_ip['address'].network))
+        nb_ip_network = nb_api.ipam.prefixes.filter(prefix=str(curr_ip['address'].network))
         if not nb_ip_network:
-            logger.error("Creating prefix: {0}".format(curr_ip['address'].network))
-            nb.ipam.prefixes.create(
-                prefix="{0}".format(curr_ip['address'].network),
+            logger.error(f"Creating prefix: {curr_ip['address'].network}")
+            nb_api.ipam.prefixes.create(
+                prefix=f"{curr_ip['address'].network}",
                 vrf=curr_ip['vrf'],
                 status='active',
             )
 
 
-        if nb_ip_record := list(nb.ipam.ip_addresses.filter(address=curr_ip['address'])):
+        if nb_ip_record := list(nb_api.ipam.ip_addresses.filter(address=curr_ip['address'])):
             # We only want to update if its on the same device.
             if nb_ip_record[0].assigned_object_type == 'dcim.interface' \
                 and nb_ip_record[0].assigned_object_id in nb_interface_id_list:
                 update_ip_address(curr_ip, nb_ip_record, nb_interface_dict)
             else:
-                create_ip_address(nb, curr_ip, nb_interface_dict)
+                create_ip_address(nb_api, curr_ip, nb_interface_dict)
         else:
-            create_ip_address(nb, curr_ip, nb_interface_dict)
+            create_ip_address(nb_api, curr_ip, nb_interface_dict)
 
     # Now we need to check for those that need to be removed from netbox
     to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x['address'], dev_ips)))
@@ -243,7 +244,7 @@ def sync_ips(nb, device_nb, device_conn) -> None:
     return
 
 def main() -> None:
-    '''
+    '''Main sync function.
     '''
 
     BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -265,12 +266,12 @@ def main() -> None:
         'Ubiquiti EdgeOS':  drivers.edgeos.EdgeOS,
     }
 
-    nb = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
+    nb_api = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
 
     device_credentials = utils.parse_device_parameters(config)
 
     # Fetch and process the devices from netbox.
-    devices = nb.dcim.devices.all()
+    devices = nb_api.dcim.devices.all()
 
     for device_nb in devices:
         if device_nb.device_role.slug in [
@@ -282,7 +283,6 @@ def main() -> None:
                 'video-encoder',
                 'video-satellite-receiver',
                 'video-satellite-splitter',
-
             ]:
             continue
 
@@ -302,7 +302,7 @@ def main() -> None:
         try:
             driver = platform_to_driver[str(device_nb.platform)]
         except KeyError:
-            logger.error("Unsupported platform '{0}'".format(device_nb.platform))
+            logger.error(f"Unsupported platform '{device_nb.platform}'")
             continue
 
         # if device_nb.name not in []:
@@ -316,22 +316,25 @@ def main() -> None:
         full_dev_creds = {**device_credentials, 'hostname': device_ip}
         try:
             device_conn = driver(**full_dev_creds)
-        except Exception as e:
-            logger.error("There was an error connecting to '{2}': {0}, {1}".format(e.__class__, e, device_ip))
+        except Exception as exc:
+            logger.error("There was an error connecting to '{2}': {0}, {1}".\
+                         format(exc.__class__, exc, device_ip))
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+            logger.error(pprint.pformat(
+                traceback.format_exception(exc_type, exc_value, exc_traceback)
+            ))
             continue
 
         try:
             # Now to sync the data
-            sync_interfaces(nb, device_nb, device_conn)
-            sync_ips(nb, device_nb, device_conn)
+            sync_interfaces(nb_api, device_nb, device_conn)
+            sync_ips(nb_api, device_nb, device_conn)
 
             # sync_vlans()
             # sync_routes(nb, device_nb, device_conn)
             # sync_neighbours(nb, device_nb, device_conn)
-        except Exception as e:
-            logger.error("There was an error syncing '{2}': {0}, {1}".format(e.__class__, e, device_ip))
+        except Exception as exc:
+            logger.error("There was an error syncing '{2}': {0}, {1}".format(exc.__class__, exc, device_ip))
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
 
