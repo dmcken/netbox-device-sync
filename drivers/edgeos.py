@@ -223,6 +223,12 @@ class EdgeOS(drivers.base.DriverBase):
                     curr_interface['Parent'] = parts[0]
                     curr_interface['Vlan'] = int(parts[1])
 
+                try:
+                    if curr_interface['Parent'] == 'NONE':
+                        del curr_interface['Parent']
+                except KeyError:
+                    pass
+
                 continue
 
             # These are the lines that require no special state
