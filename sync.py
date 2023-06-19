@@ -25,10 +25,10 @@ logger = logging.getLogger(__name__)
 
 def sync_interfaces(nb, device_nb, device_conn):
     '''
-    
+
     nb - pynetbox instance
     device_nb - the device from netbox's perspective
-    device_conn - 
+    device_conn -
     '''
 
     # - Interfaces:
@@ -68,7 +68,7 @@ def sync_interfaces(nb, device_nb, device_conn):
 
                 # Type's get has the value in type.value vs type itself.
                 # Ugly hack for now.
-                if k == 'type': 
+                if k == 'type':
                     if curr_nb_obj.type.value != v:
                         changed[k] = {
                             'old': str(curr_nb_obj.type.value),
@@ -89,7 +89,7 @@ def sync_interfaces(nb, device_nb, device_conn):
                     else: # The parent interface is None
                         new_parent_desc = "{0}".format(v)
 
-                    
+
                     if k_attr := getattr(curr_nb_obj, k):
                         old_parent_desc = "{0}/{1}".format(k_attr.id, nb_parent_interfaces[0].name)
                     else:
@@ -192,7 +192,7 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
 
 def sync_ips(nb, device_nb, device_conn) -> None:
     '''
-    
+
     '''
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
@@ -223,7 +223,7 @@ def sync_ips(nb, device_nb, device_conn) -> None:
                 status='active',
             )
 
-        
+
         if nb_ip_record := list(nb.ipam.ip_addresses.filter(address=curr_ip['address'])):
             # We only want to update if its on the same device.
             if nb_ip_record[0].assigned_object_type == 'dcim.interface' \
@@ -253,7 +253,7 @@ def main() -> None:
     logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
-    logging.getLogger('drivers.edgeos').setLevel(logging.DEBUG)
+    logging.getLogger('drivers.edgeos').setLevel(logging.ERROR)
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
 
     # How best to make this dynamic (likely factory method)
@@ -287,7 +287,7 @@ def main() -> None:
             continue
 
         logger.info("Processing device: {0:04}/{1}/{2} => {3} => {4}".format(
-            device_nb.id, device_nb.name, 
+            device_nb.id, device_nb.name,
             device_nb.device_role.slug,
             device_nb.platform,
             device_nb.primary_ip,
@@ -334,7 +334,7 @@ def main() -> None:
             logger.error("There was an error syncing '{2}': {0}, {1}".format(e.__class__, e, device_ip))
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-        
+
         # To Sync
         # - Vlans - Only for devices in charge of the vlan domain
         # - Static routes - Use to update prefixes
