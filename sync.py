@@ -253,11 +253,7 @@ def main() -> None:
     logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
-<<<<<<< HEAD
     logging.getLogger('drivers.edgeos').setLevel(logging.ERROR)
-=======
-    logging.getLogger('drivers.edgeos').setLevel(logging.INFO)
->>>>>>> fca126029b7954ca1647e66a7233137a670f00f7
     logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
 
     # How best to make this dynamic (likely factory method)
