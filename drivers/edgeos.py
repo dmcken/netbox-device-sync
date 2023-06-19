@@ -93,7 +93,7 @@ class EdgeOS(drivers.base.DriverBase):
         if 'show-interfaces' not in self._cache:
             _, stdout, _ = self._dev.exec_command('/opt/vyatta/bin/vyatta-op-cmd-wrapper show interfaces detail', timeout=30)
             self._cache['show-interfaces'] = stdout.read().decode('utf-8')
-        
+
         return self._cache['show-interfaces']
 
     def _fetch_show_configuration(self) -> typing.List[str]:
@@ -103,13 +103,13 @@ class EdgeOS(drivers.base.DriverBase):
         if 'show-configuration' not in self._cache:
             _, stdout, _ = self._dev.exec_command('/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration', timeout=30)
             self._cache['show-configuration'] = stdout.read().decode('utf-8')
-        
+
         return self._cache['show-configuration']
 
     def _parse_show_configuration(self):
         '''Parse the configuration.
         '''
-        
+
         if 'parsed-config' not in self._cache:
             raw_config = self._fetch_show_configuration()
             conf_dict = vyattaconfparser.parse_conf(raw_config)
@@ -118,7 +118,7 @@ class EdgeOS(drivers.base.DriverBase):
         return self._cache['parsed-config']
 
     def _determine_interface_type(self, interface_name: str) -> str:
-        '''Return a type for 
+        '''Return a type for
         '''
 
         type_map = {
@@ -128,12 +128,9 @@ class EdgeOS(drivers.base.DriverBase):
             'switch': 'switch',
             'npi': 'internal-ethernet',
             'imq': 'internal-offload',
-<<<<<<< HEAD
             'br': 'switch',
             'itf': 'internal-ethernet',
-=======
             'tun': 'virtual',
->>>>>>> fca126029b7954ca1647e66a7233137a670f00f7
         }
 
         res = re.match('([A-Za-z0-9]+)\.([0-9]+)', interface_name)
@@ -149,8 +146,8 @@ class EdgeOS(drivers.base.DriverBase):
 
     def _parse_show_interfaces(self):
         '''Parse the output of show interfaces to a dictionary of attributes, with caching.
-        
-        
+
+
         # An example entry from show interfaces will look like this.
         eth2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
             link/ether 24:a4:3c:3c:8f:b0 brd ff:ff:ff:ff:ff:ff
@@ -180,7 +177,7 @@ class EdgeOS(drivers.base.DriverBase):
         IP_WITH_MASK = r'([0-9A-Fa-f:\.]+)/([0-9]+)'
         AddressScope = r'(\w+)'
         InterfaceName = r'([A-Za-z0-9@\.]+)'
-        
+
         self._fetch_show_interfaces()
 
         if 'show-interfaces-parsed' in self._cache:
@@ -287,7 +284,7 @@ class EdgeOS(drivers.base.DriverBase):
 
                 curr_interface['Addresses'].append(address_rec)
                 position = 'ipaddress'
-                continue                
+                continue
 
             res = re.match('\s+RX:\s+bytes\s+packets\s+errors\s+dropped\s+overrun\s+mcast', curr_line)
             if res:
@@ -305,12 +302,12 @@ class EdgeOS(drivers.base.DriverBase):
         #     if re.match(self._interfaces_to_ignore_regex, curr_interface['FullInterfaceName']):
         #         continue
         #     logger.debug(f"Interface data :\n{pprint.pformat(curr_interface, width=200)}")
-        
+
         return self._cache['show-interfaces-parsed']
 
     def get_interfaces(self):
         '''
-        
+
         We don't get the type from the 'show interfaces' so we will map the
         devices outselves.
 
@@ -356,18 +353,14 @@ class EdgeOS(drivers.base.DriverBase):
 
             if interface_record['type'] == 'ethernet':
                 # This causes the type to be left alone.
-                interface_record['type'] = None 
-            
+                interface_record['type'] = None
+
             try:
                 interface_record['mac_address'] = curr_int['MAC']
             except KeyError:
-<<<<<<< HEAD
                 # The MAC is not set on EdgeOS devices loopback
-                if curr_int['FullInterfaceName'] not in ['lo']:
-=======
                 if curr_int['FullInterfaceName'] not in ['lo','tun0',]:
->>>>>>> fca126029b7954ca1647e66a7233137a670f00f7
-                    logger.error(f"MAC not set on interface {curr_int['FullInterfaceName']}")
+                    logger.error(f"MAC not set on interface: {curr_int['FullInterfaceName']}")
                 interface_record['mac_address'] = ''
 
             try:
@@ -402,7 +395,7 @@ class EdgeOS(drivers.base.DriverBase):
         for curr_int in raw_interfaces:
             if re.match(self._interfaces_to_ignore_regex, curr_int['FullInterfaceName']):
                 continue
-            
+
             if 'Addresses' not in curr_int:
                 continue
 
