@@ -146,7 +146,14 @@ def sync_interfaces(nb, device_nb, device_conn):
     return
 
 def create_ip_address(nb, curr_ip, nb_interface_dict) -> None:
-    logger.info("Creating IP record: {0}".format(curr_ip))
+    """Create IP address.
+
+    Args:
+        nb (_type_): _description_
+        curr_ip (_type_): _description_
+        nb_interface_dict (_type_): _description_
+    """
+    logger.info(f"Creating IP record: {curr_ip}")
     nb.ipam.ip_addresses.create(
         assigned_object_id=nb_interface_dict[curr_ip['interface']].id,
         assigned_object_type='dcim.interface',
@@ -191,16 +198,27 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
     return
 
 def sync_ips(nb_api, device_nb, device_conn) -> None:
-    '''Sync the IPs of a device.
+    """Sync IP addresses.
 
-    '''
+    Args:
+        nb_api (_type_): Netbox API connection.
+        device_nb (_type_): _description_
+        device_conn (_type_): _description_
+    """
+
+    networks_to_ignore = [
+        ipaddress.ip_network('FE80::/10'), # Link local
+	    ipaddress.ip_network('::1/128'),   # Loopback
+    ]
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
-    link_local = ipaddress.ip_network('FE80::/10')
     dev_ips = device_conn.get_ipaddresses()
-    dev_ips = list(filter(lambda x: x['address'] not in link_local, dev_ips))
-    logger.debug(f"Raw IP data for '{device_nb.name}'\n" +
-                 f"{pprint.pformat(dev_ips, width=200)}")
+    for curr_network in networks_to_ignore:
+        dev_ips = list(filter(lambda x: x['address'] not in curr_network, dev_ips))
+    logger.debug(
+        f"Raw IP data for '{device_nb.name}'\n" +
+        f"{pprint.pformat(dev_ips, width=200)}"
+    )
 
     # We need the interfaces to map the interface name to the netbox id.
     nb_ipaddresses = list(nb_api.ipam.ip_addresses.filter(device=device_nb.name))
