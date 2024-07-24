@@ -24,7 +24,7 @@ import drivers.routeros
 import utils
 
 # Globals
-BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
 device_roles_to_ignore = [
     'dh-txrx-receivers',
     'generic',
@@ -310,7 +310,7 @@ def main() -> None:
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
     logging.getLogger('drivers.edgeos').setLevel(logging.ERROR)
-    logging.basicConfig(level = logging.INFO, format=BASIC_FORMAT)
+    logging.basicConfig(level = logging.INFO, format=config.LOGGING_FORMAT)
 
     # How best to make this dynamic (likely factory method)
     # Drivers for use to fetch the data from devices:
