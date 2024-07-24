@@ -6,8 +6,10 @@ import abc
 import ipaddress
 import logging
 
+# Globals
 logger = logging.getLogger(__name__)
 
+# Exceptions
 class ConnectError(Exception):
     '''General error if we can't connect'''
     pass
@@ -16,8 +18,11 @@ class AuthenticationError(Exception):
     '''Thrown if auhentiction to a device fails'''
     pass
 
+# Data classes
+
+# Factories
 class DriverFactory(object):
-    # 
+    #
     pass
 
 
@@ -42,7 +47,7 @@ class DriverBase(metaclass = abc.ABCMeta):
     _connection = None
 
     def __init__(self, **kwargs) -> None:
-        
+
         # This cache is for storing data in the drivers between calls
         self._cache = {}
 
@@ -55,7 +60,7 @@ class DriverBase(metaclass = abc.ABCMeta):
                 continue
 
         logger.debug("Creds within base: {0}".format(creds))
-            
+
         self._connect(**creds)
 
     def __del__(self):
@@ -70,9 +75,9 @@ class DriverBase(metaclass = abc.ABCMeta):
         prefix removed and then lowercased (e.g. DEV_USERNAME becomes username).
         The hostname parameter is also added to this set of parameters and is
         the current device's hostname / IP.
-        
+
         These parameters are then filtered and mapped using the _connect_params
-                
+
         Example:
         _connect_params = {
             'hostname': 'host',
@@ -127,7 +132,7 @@ class DriverBase(metaclass = abc.ABCMeta):
 
         Return:
         list of IP definitions:
-        
+
         IP definition:
         - Dictionary containing the following fields:
         -- address: IP With subnet mask (IPv4Interface or IPv6Interface, mandatory)
