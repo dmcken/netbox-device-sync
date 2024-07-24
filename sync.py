@@ -25,8 +25,19 @@ import utils
 
 # Globals
 BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+device_roles_to_ignore = [
+    'dh-txrx-receivers',
+    'generic',
+    'patch-panel',
+    'pdu',
+    'svr-transcoder',
+    'video-encoder',
+    'video-satellite-receiver',
+    'video-satellite-splitter',
+]
 logger = logging.getLogger(__name__)
 
+# Functions
 def sync_interfaces(nb, device_nb, device_conn):
     '''
 
@@ -318,24 +329,13 @@ def main() -> None:
     devices = nb_api.dcim.devices.all()
 
     for device_nb in devices:
-        if device_nb.device_role.slug in [
-                'dh-txrx-receivers',
-                'generic',
-                'patch-panel',
-                'pdu',
-                'svr-transcoder',
-                'video-encoder',
-                'video-satellite-receiver',
-                'video-satellite-splitter',
-            ]:
+        if device_nb.role.slug in device_roles_to_ignore:
             continue
 
-        logger.info("Processing device: {0:04}/{1}/{2} => {3} => {4}".format(
-            device_nb.id, device_nb.name,
-            device_nb.device_role.slug,
-            device_nb.platform,
-            device_nb.primary_ip,
-        ))
+        logger.info(
+            f"Processing device: {device_nb.id:04}/{device_nb.name}/{device_nb.role.slug}"
+            f" => {device_nb.platform} => {device_nb.primary_ip}"
+        )
 
         if device_nb.platform is None:
             continue
