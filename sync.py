@@ -6,13 +6,15 @@
 
 '''
 
+# System imports
 import ipaddress
 import logging
 import pprint
-import pynetbox
-import re
 import sys
 import traceback
+
+# External imports
+import pynetbox
 
 # Local imports
 import config
@@ -21,6 +23,8 @@ import drivers.junos
 import drivers.routeros
 import utils
 
+# Globals
+BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 logger = logging.getLogger(__name__)
 
 def sync_interfaces(nb, device_nb, device_conn):
@@ -45,7 +49,9 @@ def sync_interfaces(nb, device_nb, device_conn):
     to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
     to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
-    #logger.debug("\nAdd: {0}\nDel: {1}\nUpdate: {2}".format(to_add_to_netbox, to_delete_from_nb, to_check_for_updates))
+    logger.debug(
+        f"\nAdd: {to_add_to_netbox}\nDel: {to_delete_from_nb}\nUpdate: {to_check_for_updates}"
+    )
 
     for curr_dev_interface in dev_interfaces:
 
@@ -78,20 +84,22 @@ def sync_interfaces(nb, device_nb, device_conn):
                 elif k in ['bridge','lag','parent']:
                     if v:
                         try:
-                            nb_parent_interfaces = list(nb.dcim.interfaces.filter(device=device_nb.name,name=v))
-                            new_parent_desc = "{0}/{1}".format(nb_parent_interfaces[0].id, v)
+                            nb_parent_interfaces = list(
+                                nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                            )
+                            new_parent_desc = f"{nb_parent_interfaces[0].id}/{v}"
                             new_parent = nb_parent_interfaces[0].id
                         except IndexError:
-                            logger.error("Could not look up parent interface for '{0}".format(
-                                curr_dev_interface
-                            ))
+                            logger.error(
+                                f"Could not look up parent interface for '{curr_dev_interface}"
+                            )
                             continue
                     else: # The parent interface is None
-                        new_parent_desc = "{0}".format(v)
+                        new_parent_desc = f"{v}"
 
 
                     if k_attr := getattr(curr_nb_obj, k):
-                        old_parent_desc = "{0}/{1}".format(k_attr.id, nb_parent_interfaces[0].name)
+                        old_parent_desc = f"{k_attr.id}/{nb_parent_interfaces[0].name}"
                     else:
                         old_parent_desc = "None"
 
@@ -109,7 +117,9 @@ def sync_interfaces(nb, device_nb, device_conn):
                     setattr(curr_nb_obj, k, v)
 
             if changed:
-                logger.info("Updating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, changed))
+                logger.info(
+                    f"Updating '{curr_dev_interface['name']}' on '{device_nb.name}' => {changed}"
+                )
                 curr_nb_obj.save()
         else:
             # Create interface
@@ -118,13 +128,21 @@ def sync_interfaces(nb, device_nb, device_conn):
                 cleaned_params['type'] = 'other'
 
             for master_interface in ['bridge','lag','parent']:
-                if master_interface in cleaned_params and cleaned_params[master_interface] != None:
-                        nb_parent_interfaces = list(nb.dcim.interfaces.filter(device=device_nb.name,name=cleaned_params[master_interface]))
-                        try:
-                            cleaned_params[master_interface] = nb_parent_interfaces[0].id
-                        except (IndexError, KeyError, AttributeError):
-                            logger.error("Unable to fetch parent interface '{0}' => '{1}'".format(device_nb.name, cleaned_params[master_interface]))
-                            cleaned_params[master_interface] = None
+                if master_interface in cleaned_params and \
+                    cleaned_params[master_interface] is not None:
+                    nb_parent_interfaces = list(
+                        nb.dcim.interfaces.filter(
+                            device=device_nb.name,
+                            name=cleaned_params[master_interface],
+                        )
+                    )
+                    try:
+                        cleaned_params[master_interface] = nb_parent_interfaces[0].id
+                    except (IndexError, KeyError, AttributeError):
+                        logger.error(
+                            f"Unable to fetch parent interface '{device_nb.name}' => '{cleaned_params[master_interface]}'"
+                        )
+                        cleaned_params[master_interface] = None
 
             logger.info("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
             try:
@@ -136,7 +154,6 @@ def sync_interfaces(nb, device_nb, device_conn):
                 logger.error("Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-            #TODO: Error checking?
 
     # Delete extra interfaces
     nb_interfaces_to_delete = filter(lambda x: x.name in to_delete_from_nb, nb_interfaces)
@@ -164,23 +181,30 @@ def create_ip_address(nb, curr_ip, nb_interface_dict) -> None:
     return
 
 def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
-    logger.debug("Checking IP record for changes: {0}".format(curr_ip))
+    """Update IP address in netbox.
+
+    Args:
+        curr_ip (_type_): _description_
+        nb_ip_record (_type_): _description_
+        nb_interface_dict (_type_): _description_
+    """
+    logger.debug(f"Checking IP record for changes: {curr_ip}")
     if len(nb_ip_record) == 1:
         changed = False
 
         if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip['interface']].id or \
             nb_ip_record[0].assigned_object_type != 'dcim.interface':
-            logger.info("Updating IP interface from '{2}': {0} -> {1}".format(
-                nb_ip_record[0].assigned_object_id,
-                nb_interface_dict[curr_ip['interface']].id,
-                nb_ip_record[0].assigned_object_type,
-            ))
+            logger.info(
+                f"Updating IP interface from '{nb_ip_record[0].assigned_object_type}':"
+                f"{nb_ip_record[0].assigned_object_id} -> "
+                f"{nb_interface_dict[curr_ip['interface']].id}"
+            )
             nb_ip_record[0].assigned_object_id = nb_interface_dict[curr_ip['interface']].id
             nb_ip_record[0].assigned_object_type = 'dcim.interface'
             changed = True
 
         if nb_ip_record[0].status.value != curr_ip['status']:
-            logger.info("Updating status: {0} -> {1}".format(nb_ip_record[0].status.value, curr_ip['status']))
+            logger.info(f"Updating status: {nb_ip_record[0].status.value} -> {curr_ip['status']}")
             nb_ip_record[0].status = curr_ip['status']
             changed = True
 
@@ -190,10 +214,10 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
             changed = True
 
         if changed:
-            logger.info("Updating IP record: {0} -> {1}".format(curr_ip, changed))
+            logger.info(f"Updating IP record: {curr_ip} -> {changed}")
             nb_ip_record[0].save()
     else:
-        logger.error("Multiple IPs found for: {0}".format(curr_ip['address']))
+        logger.error(f"Multiple IPs found for: {curr_ip['address']}")
 
     return
 
@@ -256,7 +280,10 @@ def sync_ips(nb_api, device_nb, device_conn) -> None:
     # Now we need to check for those that need to be removed from netbox
     to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x['address'], dev_ips)))
     for curr_to_del in to_del:
-        logger.info(f"Deleting IP record: {nb_ipaddresses_dict[curr_to_del].id}/{nb_ipaddresses_dict[curr_to_del].address}")
+        logger.info(
+            f"Deleting IP record: {nb_ipaddresses_dict[curr_to_del].id}"
+            f"/{nb_ipaddresses_dict[curr_to_del].address}"
+        )
         nb_ipaddresses_dict[curr_to_del].delete()
 
     return
@@ -265,7 +292,6 @@ def main() -> None:
     '''Main sync function.
     '''
 
-    BASIC_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     # Upstream libraries
     logging.getLogger('ncclient').setLevel(logging.ERROR)
     logging.getLogger('paramiko.transport').setLevel(logging.ERROR)
@@ -335,8 +361,7 @@ def main() -> None:
         try:
             device_conn = driver(**full_dev_creds)
         except Exception as exc:
-            logger.error("There was an error connecting to '{2}': {0}, {1}".\
-                         format(exc.__class__, exc, device_ip))
+            logger.error(f"There was an error connecting to '{device_ip}': {exc.__class__}, {exc}")
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.error(pprint.pformat(
                 traceback.format_exception(exc_type, exc_value, exc_traceback)
@@ -352,7 +377,7 @@ def main() -> None:
             # sync_routes(nb, device_nb, device_conn)
             # sync_neighbours(nb, device_nb, device_conn)
         except Exception as exc:
-            logger.error("There was an error syncing '{2}': {0}, {1}".format(exc.__class__, exc, device_ip))
+            logger.error(f"There was an error syncing '{device_ip}': {exc.__class__}, {exc}")
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
 
