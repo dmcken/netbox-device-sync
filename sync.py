@@ -321,7 +321,11 @@ def main() -> None:
         'Ubiquiti EdgeOS':  drivers.edgeos.EdgeOS,
     }
 
-    nb_api = pynetbox.api(config.NB_URL, token=config.NB_TOKEN, threading = True)
+    nb_api = pynetbox.api(
+        config.NB_URL,
+        token=config.NB_TOKEN,
+        threading = True
+    )
 
     device_credentials = utils.parse_device_parameters(config)
 
