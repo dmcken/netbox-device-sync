@@ -35,6 +35,13 @@ device_roles_to_ignore = [
     'video-satellite-receiver',
     'video-satellite-splitter',
 ]
+networks_to_ignore = [
+    ipaddress.ip_network('127.0.0.0'), # IPv4 Loopback
+    ipaddress.ip_network('::1/128'),     # IPv6 Loopback
+    ipaddress.ip_network('FE80::/10'),   # Link local
+
+]
+
 logger = logging.getLogger(__name__)
 
 # Functions
@@ -240,11 +247,6 @@ def sync_ips(nb_api, device_nb, device_conn) -> None:
         device_nb (_type_): _description_
         device_conn (_type_): _description_
     """
-
-    networks_to_ignore = [
-        ipaddress.ip_network('FE80::/10'), # Link local
-	    ipaddress.ip_network('::1/128'),   # Loopback
-    ]
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
     dev_ips = device_conn.get_ipaddresses()
