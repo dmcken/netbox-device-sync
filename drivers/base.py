@@ -1,5 +1,17 @@
 '''Base classes for all device drivers.
 
+Requirements for a driver:
+- Modules                      => get_modules
+    - Includes SFPs
+- Vlans                        => get_vlans
+    - Purely bridged vlans entities, vlan interfaces are handled by interfaces
+- Interfaces                   => get_interfaces
+    - VLAN
+    - Parent interfaces
+    -
+- IP Addresses (IPv4 and IPv6) => get_ipaddresses
+- Neighbours                   => get_neighbours
+
 '''
 # System imports
 import abc
@@ -12,18 +24,15 @@ logger = logging.getLogger(__name__)
 # Exceptions
 class ConnectError(Exception):
     '''General error if we can't connect'''
-    pass
 
 class AuthenticationError(Exception):
     '''Thrown if auhentiction to a device fails'''
-    pass
 
 # Data classes
 
 # Factories
 class DriverFactory(object):
-    #
-    pass
+    """Base factory for all driver objects"""
 
 
 class DriverBase(metaclass = abc.ABCMeta):
@@ -59,7 +68,7 @@ class DriverBase(metaclass = abc.ABCMeta):
             except KeyError:
                 continue
 
-        logger.debug("Creds within base: {0}".format(creds))
+        logger.debug(f"Creds within base: {creds}")
 
         self._connect(**creds)
 
@@ -95,14 +104,11 @@ class DriverBase(metaclass = abc.ABCMeta):
         in the dictionary. The routeros driver will know what port to use for its
         connections without requiring any changes to the other drivers.
         '''
-        pass
 
     @abc.abstractmethod
     def _close(self,):
-        '''
-        Close the connection to the device
-        '''
-        pass
+        """Close the connection to the device.
+        """
 
     @abc.abstractmethod
     def get_interfaces(self,):
@@ -121,9 +127,14 @@ class DriverBase(metaclass = abc.ABCMeta):
         -- type: Type of the interface (string,None allowed)
 
         Example:
-        {'description': None, 'mac_address': '64:87:88:ef:34:00', 'mtu': 1514, 'name': 'ge-0/0/0', 'type': None}
+        {
+            'description': None,
+            'mac_address': '64:87:88:ef:34:00',
+            'mtu': 1514,
+            'name': 'ge-0/0/0',
+            'type': None
+        }
         '''
-        pass
 
     @abc.abstractmethod
     def get_ipaddresses(self,):
@@ -137,13 +148,17 @@ class DriverBase(metaclass = abc.ABCMeta):
         - Dictionary containing the following fields:
         -- address: IP With subnet mask (IPv4Interface or IPv6Interface, mandatory)
         -- interface:  name of the interface. (string,mandatory)
-        -- status: One of the netbox IP address statuses. The current list: active,reserved,deprecated,dhcp,slaac (string,mandatory)
+        -- status: One of the netbox IP address statuses.
+           Current list: active,reserved,deprecated,dhcp,slaac (string,mandatory)
         -- vrf: VRF this IP sits within (string,If unknown set to None)
         Example:
-        {'address': IPv4Interface('172.17.10.89/29'), 'interface': 'ge-0/0/2.0', 'status': 'active', 'vrf': None}
-
+        {
+            'address': IPv4Interface('172.17.10.89/29'),
+            'interface': 'ge-0/0/2.0',
+            'status': 'active',
+            'vrf': None
+        }
         '''
-        pass
 
     # @abc.abstractmethod
     # def get_vlans(self,):

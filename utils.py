@@ -8,9 +8,27 @@ import ipaddress
 import re
 
 
-
+# Common definitions
 link_local_subnet = ipaddress.ip_network('fe80::/10')
 
+device_roles_to_ignore = [
+    'dh-txrx-receivers',
+    'generic',
+    'patch-panel',
+    'pdu',
+    'svr-transcoder',
+    'video-encoder',
+    'video-satellite-receiver',
+    'video-satellite-splitter',
+]
+networks_to_ignore = [
+    ipaddress.ip_network('127.0.0.0'), # IPv4 Loopback
+    ipaddress.ip_network('::1/128'),     # IPv6 Loopback
+    ipaddress.ip_network('FE80::/10'),   # Link local
+
+]
+
+# Utility functions
 def parse_device_parameters(config):
     """Parse the config parameters.
 

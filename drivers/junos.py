@@ -1,5 +1,4 @@
-'''
-'''
+'''Juniper JunOS driver'''
 import collections
 import ipaddress
 import jnpr.junos
@@ -17,6 +16,7 @@ import utils
 logger = logging.getLogger(__name__)
 
 class JunOS(drivers.base.DriverBase):
+    '''Juniper JunOS driver'''
 
     _connect_params = {
         'hostname': {'dest': 'host'},
@@ -43,7 +43,7 @@ class JunOS(drivers.base.DriverBase):
     _interfaces_to_ignore = [
         'ae[0-9]+.32767',               # We only want to ignore the .32767 sub-interface for any aeX interfaces
         'bme0',
-        'cbp0',                         # Customer backbone port 
+        'cbp0',                         # Customer backbone port
         'dsc',                          # Discard interface
         'em[0-9]+',                          # Internal cross connect between routing engine and control board.
         'esi',                          # Ethernet segment identifier?
@@ -54,27 +54,27 @@ class JunOS(drivers.base.DriverBase):
         'jsrv',                         # Juniper services interface.
         'lc-[0-9]+/[0-9]+/[0-9]+',      # Internally generated interface that is not configurable.
         'lo0.16384',                    #
-        'lo0.16385',                    # 
-        'lsi',                          # 
+        'lo0.16385',                    #
+        'lsi',                          #
         'lsq-0/0/0',                    # link services queuing interface
-        'lt-0/0/0',                     # 
+        'lt-0/0/0',                     #
         'mt-0/0/0',                     # Unknown
-        'mtun',                         # 
+        'mtun',                         #
         'pfe-[0-9]+/[0-9]+/[0-9]+',     # Packet forwarding engine
         'pfh-[0-9]+/[0-9]+/[0-9]+',     # https://kb.juniper.net/InfoCenter/index?page=content&id=KB23578&cat=MX_SERIES&actp=LIST
-        'pimd',                         # 
-        'pime',                         # 
-        'pp0',                          # 
+        'pimd',                         #
+        'pime',                         #
+        'pp0',                          #
         'ppd0',                         #
-        'ppe0',                         # 
+        'ppe0',                         #
         'si-0/0/0.0',                   # Services-inline interface (only ignore the logical interfaces)
-        'sp-0/0/0',                     # 
-        'sp-0/0/0.(0|16383)',           # 
-        'st0',                          # 
-        'tap',                          # 
+        'sp-0/0/0',                     #
+        'sp-0/0/0.(0|16383)',           #
+        'st0',                          #
+        'tap',                          #
     ]
     _interfaces_to_ignore_regex = "({0})".format("|".join(_interfaces_to_ignore))
-    
+
 
     def _connect(self, **kwargs):
         '''
@@ -96,10 +96,10 @@ class JunOS(drivers.base.DriverBase):
         if self._dev:
             self._dev.close()
         del self._dev
-        
+
 
     def _get_config(self, xml_filter=None):
-        
+
         args = {
             'options': {
                 # We always want the live config.
@@ -115,8 +115,8 @@ class JunOS(drivers.base.DriverBase):
 
     def get_interfaces(self,):
         '''
-        
-        
+
+
 
         '''
         # TODO: Simplify and split up
@@ -168,10 +168,10 @@ class JunOS(drivers.base.DriverBase):
             else: # Every other type of interface
                 interface_dict['type'] = None
                 normal_interfaces.append(interface_dict)
-            
+
             # Now to handle all logical instances (units in JunOS parlance).
             if 'logical-interface' in curr_int:
-                
+
                 # In the case of a single unit it is a direct OrderedDict vs list of OrderedDict
                 if isinstance(curr_int['logical-interface'], list):
                     logical_int_list = curr_int['logical-interface']
@@ -179,13 +179,13 @@ class JunOS(drivers.base.DriverBase):
                     logical_int_list = [curr_int['logical-interface']]
 
                 for curr_logical_int in logical_int_list:
-                    
+
                     if re.match(self._interfaces_to_ignore_regex, curr_logical_int['name']):
                         continue
 
                     try:
                         # aenet is the sub-interfaces on the slave interfaces for an aeX interface
-                        # e.g. xe-0/0/0.5 is created automatically for ae0.5 if xe-0/0/0 is a 
+                        # e.g. xe-0/0/0.5 is created automatically for ae0.5 if xe-0/0/0 is a
                         # slave of ae0.
                         if curr_logical_int['address-family']['address-family-name'] in ['aenet']:
                             '''
@@ -232,7 +232,7 @@ class JunOS(drivers.base.DriverBase):
                             address_family_mtu = int(curr_address_family['mtu'])
                         except (ValueError, KeyError):
                             address_family_mtu = 0
-                            
+
                         if address_family_mtu > unit_mtu:
                             unit_mtu = address_family_mtu
 
@@ -270,7 +270,7 @@ class JunOS(drivers.base.DriverBase):
         rez = self._dev.rpc.get_interface_information()
         int_dict = xmltodict.parse(etree.tostring(rez))
         for curr_int in int_dict['interface-information']['physical-interface']:
-            
+
             # Skip the ignored interfaces
             if re.match(self._interfaces_to_ignore_regex, curr_int['name']):
                 continue
@@ -305,7 +305,7 @@ class JunOS(drivers.base.DriverBase):
                         if curr_address_family['address-family-name'] not in ['inet', 'inet6']:
                             continue
 
-                        
+
                         #logger.debug("curr_address_family on: {0}\n{1}".format(curr_logical_int['name'],pprint.pformat(curr_address_family)))
 
                         try:
@@ -357,7 +357,7 @@ class JunOS(drivers.base.DriverBase):
         # Fetch anchor
 
         return routes
-            
+
 
 
 

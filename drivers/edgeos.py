@@ -9,11 +9,9 @@ Parse using vyatta-conf-parser (I already have a fork of it).
 '''
 # System import
 import ipaddress
-import librouteros
 import logging
 import pprint
 import re
-import socket
 import typing
 
 # External imports
@@ -26,7 +24,6 @@ import drivers.base
 import utils
 
 logger = logging.getLogger(__name__)
-
 
 class EdgeOS(drivers.base.DriverBase):
     '''
@@ -133,7 +130,7 @@ class EdgeOS(drivers.base.DriverBase):
             'tun': 'virtual',
         }
 
-        res = re.match('([A-Za-z0-9]+)\.([0-9]+)', interface_name)
+        res = re.match(r'([A-Za-z0-9]+)\.([0-9]+)', interface_name)
         if res: # We found a vlan ID
             return 'vlan'
 

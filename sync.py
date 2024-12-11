@@ -23,25 +23,6 @@ import drivers.junos
 import drivers.routeros
 import utils
 
-# Globals
-
-device_roles_to_ignore = [
-    'dh-txrx-receivers',
-    'generic',
-    'patch-panel',
-    'pdu',
-    'svr-transcoder',
-    'video-encoder',
-    'video-satellite-receiver',
-    'video-satellite-splitter',
-]
-networks_to_ignore = [
-    ipaddress.ip_network('127.0.0.0'), # IPv4 Loopback
-    ipaddress.ip_network('::1/128'),     # IPv6 Loopback
-    ipaddress.ip_network('FE80::/10'),   # Link local
-
-]
-
 logger = logging.getLogger(__name__)
 
 # Functions
@@ -250,7 +231,7 @@ def sync_ips(nb_api, device_nb, device_conn) -> None:
 
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
     dev_ips = device_conn.get_ipaddresses()
-    for curr_network in networks_to_ignore:
+    for curr_network in utils.networks_to_ignore:
         dev_ips = list(filter(lambda x: x['address'] not in curr_network, dev_ips))
     logger.debug(
         f"Raw IP data for '{device_nb.name}'\n" +
@@ -335,7 +316,7 @@ def main() -> None:
     devices = nb_api.dcim.devices.all()
 
     for device_nb in devices:
-        if device_nb.role.slug in device_roles_to_ignore:
+        if device_nb.role.slug in utils.device_roles_to_ignore:
             continue
 
         logger.info(
@@ -385,7 +366,9 @@ def main() -> None:
         except Exception as exc:
             logger.error(f"There was an error syncing '{device_ip}': {exc.__class__}, {exc}")
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
+            logger.error(pprint.pformat(
+                traceback.format_exception(exc_type, exc_value, exc_traceback)
+            ))
 
         # To Sync
         # - Vlans - Only for devices in charge of the vlan domain

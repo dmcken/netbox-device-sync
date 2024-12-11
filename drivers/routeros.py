@@ -1,21 +1,22 @@
+'''Mikrotik routeros driver'''
 
 # System import
 import ipaddress
-import librouteros
 import logging
 import pprint
 import socket
 
-# Local imports
+# External import
+import librouteros
+
+# Local import
 import drivers.base
 import utils
 
 logger = logging.getLogger(__name__)
 
 class RouterOS(drivers.base.DriverBase):
-    '''
-    RouterOS device driver
-    '''
+    '''RouterOS device driver'''
 
     _connect_params = {
         'hostname': {'dest': 'host'},
@@ -38,13 +39,17 @@ class RouterOS(drivers.base.DriverBase):
     ]
 
     def _connect(self, **kwargs) -> None:
-        '''
-        '''
+        """Connect to device.
+
+        Raises:
+            drivers.base.AuthenticationError: _description_
+            drivers.base.ConnectError: _description_
+        """
         try:
             # Connection type, 6.43 and later use plain, before that uses token
             # https://librouteros.readthedocs.io/en/3.2.0/connect.html
             # kwargs['login_method'] = librouteros.login.plain
-            logger.debug("Attempting to connect to RouterOS device: {0}".format(kwargs))
+            logger.debug(f"Attempting to connect to RouterOS device: {kwargs}")
             self._dev = librouteros.connect(**kwargs)
         except librouteros.exceptions.TrapError as exc:
             # TODO: Check for specific message 'invalid user name or password (6)'
@@ -52,7 +57,9 @@ class RouterOS(drivers.base.DriverBase):
         except socket.timeout as exc:
             raise drivers.base.ConnectError() from exc
 
-    def _close(self,):
+    def _close(self,) -> None:
+        """Close connection to device.
+        """
         try:
             if self._dev:
                 self._dev.close()
@@ -60,8 +67,8 @@ class RouterOS(drivers.base.DriverBase):
         except AttributeError:
             pass
 
-    def get_interfaces(self):
-        
+    def get_interfaces(self,) -> None:
+
         rez_parent_interfaces = []
         rez_interfaces = []
 
@@ -86,7 +93,7 @@ class RouterOS(drivers.base.DriverBase):
         ros_interfaces = list(self._dev.path('interface'))
 
         for curr_interface in ros_interfaces:
-            logger.debug("Interface data: {0}".format(pprint.pformat(curr_interface)))
+            logger.debug(f"Interface data: {pprint.pformat(curr_interface)}")
             interface_rec = {
                 'name': curr_interface['name'],
             }
@@ -104,13 +111,13 @@ class RouterOS(drivers.base.DriverBase):
                 except KeyError:
                     interface_rec['mtu'] = None
             except KeyError:
-                logger.error("Missing MTU for interface: {0}".format(curr_interface['name']))
+                logger.error(f"Missing MTU for interface: {curr_interface['name']}")
                 interface_rec['mtu'] = None
 
                 # logger.error("Invalid MTU '{0}' on {1}".format(
                 #     curr_interface['mtu'],
                 #     curr_interface,
-                # ))                  
+                # ))
 
             try:
                 interface_rec['description'] = curr_interface['comment'].strip()
@@ -157,16 +164,16 @@ class RouterOS(drivers.base.DriverBase):
             ros_ips = list(data)
 
             for curr_ip_addr in ros_ips:
-                logger.debug("IPv{0} address: {1}".format(family, curr_ip_addr))
+                logger.debug(f"IPv{family} address: {curr_ip_addr}")
                 try:
-                    if curr_ip_addr['link-local'] == True:
+                    if curr_ip_addr['link-local'] is True:
                         continue
                 except KeyError:
                     pass
 
                 # Using depreciated for disabled IPs
                 ip_status = 'active'
-                if curr_ip_addr['disabled'] == True:
+                if curr_ip_addr['disabled'] is True:
                     ip_status = 'deprecated'
 
                 ip_rec = {}
