@@ -11,7 +11,6 @@ from lxml import etree
 
 # Local imports
 import drivers.base
-import utils
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +72,7 @@ class JunOS(drivers.base.DriverBase):
         'st0',                          #
         'tap',                          #
     ]
-    _interfaces_to_ignore_regex = "({0})".format("|".join(_interfaces_to_ignore))
+    _interfaces_to_ignore_regex = f'({"|".join(_interfaces_to_ignore)})'
 
 
     def _connect(self, **kwargs):
@@ -335,7 +334,7 @@ class JunOS(drivers.base.DriverBase):
 
                             if interface_addr.version == 6:
                                 # Skip link local addresses
-                                if interface_addr in utils.link_local_subnet:
+                                if interface_addr in self._link_local_subnet:
                                     continue
 
                             ip_addresses.append({
