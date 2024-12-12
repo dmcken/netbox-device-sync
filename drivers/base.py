@@ -15,8 +15,12 @@ Requirements for a driver:
 '''
 # System imports
 import abc
+import dataclasses
 import ipaddress
 import logging
+
+# Local imports
+import utils
 
 # Globals
 logger = logging.getLogger(__name__)
@@ -29,9 +33,35 @@ class AuthenticationError(Exception):
     '''Thrown if auhentiction to a device fails'''
 
 # Data classes
+@dataclasses.dataclass()
+class Interface:
+    """A network device interface"""
+    name: str
+
+@dataclasses.dataclass
+class IPAddress:
+    """IP Address"""
+    address: ipaddress.IPv4Interface | ipaddress.IPv6Interface
+
+@dataclasses.dataclass
+class Route:
+    '''Route definitions (most commonly static)'''
+    prefix: ipaddress.IPv4Network | ipaddress.IPv6Network
+    gateway: ipaddress.IPv4Address | ipaddress.IPv6Address
+
+@dataclasses.dataclass
+class Vlan:
+    '''Vlan definition'''
+    id: int
+
+@dataclasses.dataclass
+class Neighbour:
+    '''Neighbour to current device'''
+    mac: str
+    interface: str
 
 # Factories
-class DriverFactory(object):
+class DriverFactory:
     """Base factory for all driver objects"""
 
 
@@ -48,10 +78,8 @@ class DriverBase(metaclass = abc.ABCMeta):
     - password
     - key_file
     '''
-    _addresses_to_ignore = [
-        ipaddress.ip_interface('127.0.0.1/8'),
-        ipaddress.ip_interface('::1/128'),
-    ]
+    _addresses_to_ignore = utils.networks_to_ignore
+    _link_local_subnet   = utils.link_local_subnet
     _connect_params = {}
     _connection = None
 
@@ -77,15 +105,14 @@ class DriverBase(metaclass = abc.ABCMeta):
 
     @abc.abstractmethod
     def _connect(self, **kwargs):
-        '''
-        Creates a connection to the device:
+        '''Creates a connection to the device.
 
         The incoming parameters will be from the config.py DEV_* with the DEV_
         prefix removed and then lowercased (e.g. DEV_USERNAME becomes username).
         The hostname parameter is also added to this set of parameters and is
         the current device's hostname / IP.
 
-        These parameters are then filtered and mapped using the _connect_params
+        These parameters are then filtered and mapped using the _connect_params:
 
         Example:
         _connect_params = {
@@ -94,8 +121,9 @@ class DriverBase(metaclass = abc.ABCMeta):
             'keyfile':  'ssh_private_key_file',
         }
 
-        will only accept the hostname, username and keyfile parameters and map them
-        to host, user and ssh_private_key_file respectively.
+        will only accept the hostname, username, password and keyfile
+        parameters and map them to host, user and ssh_private_key_file
+        respectively.
 
         This setup should make allowing the drivers to share parameters that make
         sense and break out the ones that don't. An example of this could be
@@ -111,8 +139,8 @@ class DriverBase(metaclass = abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def get_interfaces(self,):
-        '''
+    def get_interfaces(self,) -> list[]:
+        '''Get interfaces associated with device.
         TODO: Document what is expected of the drivers
 
         Return:
