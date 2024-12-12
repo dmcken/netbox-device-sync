@@ -26,6 +26,9 @@ device_roles_to_ignore = [
     'video-satellite-splitter',
 ]
 networks_to_ignore = [
+    # Pull full definitions from:
+    # ipaddress._IPv4Constants
+    # ipaddress._IPv6Constants
     ipaddress.ip_network('127.0.0.0'), # IPv4 Loopback
     ipaddress.ip_network('::1/128'),     # IPv6 Loopback
     ipaddress.ip_network('FE80::/10'),   # Link local
