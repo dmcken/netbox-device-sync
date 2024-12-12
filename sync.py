@@ -1,12 +1,13 @@
 '''Device sync script.
 
-
+The main CLI sits here.
 
 
 
 '''
 
 # System imports
+import argparse
 import ipaddress
 import logging
 import pprint
@@ -18,15 +19,12 @@ import pynetbox
 
 # Local imports
 import config
-import drivers.edgeos
-import drivers.junos
-import drivers.routeros
+import drivers.base
 import utils
 
 logger = logging.getLogger(__name__)
 
-# Functions
-def sync_interfaces(nb, device_nb, device_conn):
+def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.DriverBase):
     '''
 
     nb - pynetbox instance
@@ -149,10 +147,6 @@ def sync_interfaces(nb, device_nb, device_conn):
             except pynetbox.core.query.RequestError as e:
                 logger.error("Netbox API Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
                 continue
-            except Exception as e:
-                logger.error("Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                logger.error(pprint.pformat(traceback.format_exception(exc_type, exc_value, exc_traceback)))
 
     # Delete extra interfaces
     nb_interfaces_to_delete = filter(lambda x: x.name in to_delete_from_nb, nb_interfaces)
@@ -161,7 +155,7 @@ def sync_interfaces(nb, device_nb, device_conn):
 
     return
 
-def create_ip_address(nb, curr_ip, nb_interface_dict) -> None:
+def create_ip_address(nb: pynetbox.api, curr_ip, nb_interface_dict) -> None:
     """Create IP address.
 
     Args:
@@ -220,7 +214,7 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
 
     return
 
-def sync_ips(nb_api, device_nb, device_conn) -> None:
+def sync_ips(nb_api: pynetbox.api, device_nb, device_conn) -> None:
     """Sync IP addresses.
 
     Args:
@@ -282,10 +276,9 @@ def sync_ips(nb_api, device_nb, device_conn) -> None:
 
     return
 
-def main() -> None:
-    '''Main sync function.
-    '''
-
+def setup_logging(args: argparse.Namespace) -> None:
+    """Setup logging.
+    """
     # Upstream libraries
     logging.getLogger('ncclient').setLevel(logging.ERROR)
     logging.getLogger('paramiko.transport').setLevel(logging.ERROR)
@@ -295,14 +288,24 @@ def main() -> None:
     logging.getLogger('drivers.edgeos').setLevel(logging.ERROR)
     logging.basicConfig(level = logging.INFO, format=config.LOGGING_FORMAT)
 
-    # How best to make this dynamic (likely factory method)
-    # Drivers for use to fetch the data from devices:
-    # - EdgeRouter
-    platform_to_driver = {
-        'JunOS':            drivers.junos.JunOS,
-        'RouterOS':         drivers.routeros.RouterOS,
-        'Ubiquiti EdgeOS':  drivers.edgeos.EdgeOS,
-    }
+def parse_arguments() -> argparse.Namespace:
+    """Parse arguments.
+    """
+    parser = argparse.ArgumentParser(
+        prog="Netbox device syncer",
+        description="",
+    )
+
+    parser.add_argument('-d','--debug', action='store_true')
+
+    args = parser.parse_args()
+    return args
+
+def main() -> None:
+    '''Main sync function.
+    '''
+    args = parse_arguments()
+    setup_logging(args)
 
     nb_api = pynetbox.api(
         config.NB_URL,
@@ -316,6 +319,9 @@ def main() -> None:
     devices = nb_api.dcim.devices.all()
 
     for device_nb in devices:
+        # Filter devices we can't or don't want to process.
+
+        # Filter the device roles we don't want to probe.
         if device_nb.role.slug in utils.device_roles_to_ignore:
             continue
 
@@ -324,45 +330,59 @@ def main() -> None:
             f" => {device_nb.platform} => {device_nb.primary_ip}"
         )
 
-        if device_nb.platform is None:
+        # Is the platform empty?
+        # Is the primary IP not set?
+        # Only process devices with acceptable statuses
+        if device_nb.platform is None or \
+           device_nb.primary_ip is None or \
+           device_nb.status.value not in utils.acceptable_device_status:
             continue
 
-        if device_nb.status.value not in ['active']:
-            continue
-
-        try:
-            driver = platform_to_driver[str(device_nb.platform)]
-        except KeyError:
-            logger.error(f"Unsupported platform '{device_nb.platform}'")
-            continue
-
+        # Filter devices with specific names
+        # This should be provided via CLI arguments.
         # if device_nb.name not in []:
         #     continue
 
-        if device_nb.primary_ip is None:
-            continue
-
-        # Create a driver passing it the credentials and the primary IP
-        device_ip = str(ipaddress.ip_interface(device_nb.primary_ip).ip)
-        full_dev_creds = {**device_credentials, 'hostname': device_ip}
         try:
+            # Build the driver and connect to the device
+            # Create a driver passing it the credentials and the primary IP
+            try:
+                driver = utils.platform_to_driver[str(device_nb.platform)]
+            except KeyError as exc:
+                raise drivers.base.ConnectError(
+                    f"Unsupported platform '{device_nb.platform}'"
+                ) from exc
+
+            device_ip = str(ipaddress.ip_interface(device_nb.primary_ip).ip)
+            full_dev_creds = {**device_credentials, 'hostname': device_ip}
             device_conn = driver(**full_dev_creds)
-        except Exception as exc:
-            logger.error(f"There was an error connecting to '{device_ip}': {exc.__class__}, {exc}")
+
+            # Now to sync the data
+            sync_interfaces(nb_api, device_nb, device_conn)
+            sync_ips(nb_api, device_nb, device_conn)
+
+            # To Sync
+            # - Vlans - Only for devices in charge of the vlan domain
+            # - Static routes - Use to update prefixes
+            # - Neighbour data (LLDP / CDP) - For building neighbour relations
+            #   and rough cable plant.
+
+            # sync_vlans()
+            # sync_routes(nb, device_nb, device_conn)
+            # sync_neighbours(nb, device_nb, device_conn)
+            del device_conn
+        except drivers.base.ConnectError as exc:
+            logger.error(
+                f"There was an error connecting to '{device_ip}': {exc.__class__} => {exc}"
+            )
             exc_type, exc_value, exc_traceback = sys.exc_info()
             logger.error(pprint.pformat(
                 traceback.format_exception(exc_type, exc_value, exc_traceback)
             ))
             continue
-
-        try:
-            # Now to sync the data
-            sync_interfaces(nb_api, device_nb, device_conn)
-            sync_ips(nb_api, device_nb, device_conn)
-
-            # sync_vlans()
-            # sync_routes(nb, device_nb, device_conn)
-            # sync_neighbours(nb, device_nb, device_conn)
+        # This is a last resort catcher, I want to catch and at least provide some
+        # useful information before moving onto the next device.
+        # pylint: disable=W0718
         except Exception as exc:
             logger.error(f"There was an error syncing '{device_ip}': {exc.__class__}, {exc}")
             exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -370,14 +390,7 @@ def main() -> None:
                 traceback.format_exception(exc_type, exc_value, exc_traceback)
             ))
 
-        # To Sync
-        # - Vlans - Only for devices in charge of the vlan domain
-        # - Static routes - Use to update prefixes
-        # - Neighbour data (LLDP / CDP) - For building neighbour relations and rough cable plant.
-
-        del device_conn
-
     logger.info("Done")
 
-
-main()
+if __name__ == '__main__':
+    main()
