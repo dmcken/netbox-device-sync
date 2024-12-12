@@ -11,7 +11,6 @@ import librouteros
 
 # Local import
 import drivers.base
-import utils
 
 logger = logging.getLogger(__name__)
 
