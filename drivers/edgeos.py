@@ -21,7 +21,6 @@ import vyattaconfparser
 
 # Local imports
 import drivers.base
-import utils
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +52,13 @@ class EdgeOS(drivers.base.DriverBase):
         'npi2',
         'npi3',
     ]
-    _interfaces_to_ignore_regex = "({0})".format("|".join(_interfaces_to_ignore))
+    _interfaces_to_ignore_regex = f"({'|'.join(_interfaces_to_ignore)})"
 
     def _connect(self, **kwargs) -> None:
         '''
         '''
         try:
-            logger.debug("Attempting to connect to Ubnt EdgeOS device: {0}".format(kwargs))
+            logger.debug(f"Attempting to connect to Ubnt EdgeOS device: {kwargs}")
             self._dev = paramiko.client.SSHClient()
             self._dev.load_system_host_keys()
             self._dev.set_missing_host_key_policy(paramiko.client.AutoAddPolicy)
@@ -88,7 +87,10 @@ class EdgeOS(drivers.base.DriverBase):
 
         logger.debug("Entered EdgeOS._fetch_show_interfaces")
         if 'show-interfaces' not in self._cache:
-            _, stdout, _ = self._dev.exec_command('/opt/vyatta/bin/vyatta-op-cmd-wrapper show interfaces detail', timeout=30)
+            _, stdout, _ = self._dev.exec_command(
+                '/opt/vyatta/bin/vyatta-op-cmd-wrapper show interfaces detail',
+                timeout=30,
+            )
             self._cache['show-interfaces'] = stdout.read().decode('utf-8')
 
         return self._cache['show-interfaces']
@@ -98,7 +100,10 @@ class EdgeOS(drivers.base.DriverBase):
 
         logger.debug("Entered EdgeOS._fetch_show_interfaces")
         if 'show-configuration' not in self._cache:
-            _, stdout, _ = self._dev.exec_command('/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration', timeout=30)
+            _, stdout, _ = self._dev.exec_command(
+                '/opt/vyatta/bin/vyatta-op-cmd-wrapper show configuration',
+                timeout=30,
+            )
             self._cache['show-configuration'] = stdout.read().decode('utf-8')
 
         return self._cache['show-configuration']
@@ -229,7 +234,7 @@ class EdgeOS(drivers.base.DriverBase):
                 continue
 
             # These are the lines that require no special state
-            res = re.match('\s+Description: (.*)', curr_line)
+            res = re.match(r'\s+Description: (.*)', curr_line)
             if res:
                 curr_interface['Description'] = res.group(1)
                 continue
@@ -289,12 +294,18 @@ class EdgeOS(drivers.base.DriverBase):
                 position = 'ipaddress'
                 continue
 
-            res = re.match('\s+RX:\s+bytes\s+packets\s+errors\s+dropped\s+overrun\s+mcast', curr_line)
+            res = re.match(
+                r'\s+RX:\s+bytes\s+packets\s+errors\s+dropped\s+overrun\s+mcast',
+                curr_line
+            )
             if res:
                 position = 'RX-stats'
                 continue
 
-            res = re.match('\s+TX:\s+bytes\s+packets\s+errors\s+dropped\s+carrier\s+collisions', curr_line)
+            res = re.match(
+                r'\s+TX:\s+bytes\s+packets\s+errors\s+dropped\s+carrier\s+collisions',
+                curr_line
+            )
             if res:
                 position = 'TX-stats'
                 continue
