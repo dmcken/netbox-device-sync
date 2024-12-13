@@ -37,6 +37,13 @@ class AuthenticationError(Exception):
 class Interface:
     """A network device interface"""
     name: str
+    bridge: str | None = None
+    description: str = ''
+    lag: str | None = None
+    mac: str = ''
+    mtu: int | None = None
+    parent: str | None = None
+    type: str = ''
 
 @dataclasses.dataclass
 class IPAddress:
@@ -139,7 +146,7 @@ class DriverBase(metaclass = abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def get_interfaces(self,) -> list[]:
+    def get_interfaces(self,):
         '''Get interfaces associated with device.
         TODO: Document what is expected of the drivers
 
