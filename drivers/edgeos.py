@@ -166,19 +166,20 @@ class EdgeOS(drivers.base.DriverBase):
         '''
         logger.debug("Entered EdgeOS._parse_show_interfaces")
 
-        FullInterfaceName = r'([A-Za-z0-9@\.]+)'
-        InterfaceStatusFlags = r'([\w,-]+)'
-        MTU = r'(\d+)'
-        QDISC = r'(\w+)'
-        InterfaceState = r'(\w+)'
-        InterfaceGroup = r'(\w+)'
-        QLEN = r'(\d+)'
-        MAC = r'([A-Fa-f0-9:]+)'
-        AddressFamily = '(inet|inet6)'
-        IP = r'([0-9A-Fa-f:\.]+)'
-        IP_WITH_MASK = r'([0-9A-Fa-f:\.]+)/([0-9]+)'
-        AddressScope = r'(\w+)'
-        InterfaceName = r'([A-Za-z0-9@\.]+)'
+        # These should be isolated
+        re_full_interface_name = r'([A-Za-z0-9@\.]+)'
+        re_interface_status_flags = r'([\w,-]+)'
+        re_mtu = r'(\d+)'
+        re_qdisc = r'(\w+)'
+        re_interface_state = r'(\w+)'
+        re_interface_group = r'(\w+)'
+        re_qlen = r'(\d+)'
+        re_mac = r'([A-Fa-f0-9:]+)'
+        re_address_family = '(inet|inet6)'
+        re_ip = r'([0-9A-Fa-f:\.]+)'
+        rep_ip_with_mask = r'([0-9A-Fa-f:\.]+)/([0-9]+)'
+        re_address_scope = r'(\w+)'
+        re_interface_name = r'([A-Za-z0-9@\.]+)'
 
         self._fetch_show_interfaces()
 
@@ -192,10 +193,13 @@ class EdgeOS(drivers.base.DriverBase):
 
         for curr_line in self._cache['show-interfaces'].splitlines():
             # Check for a begining of status line
-            res = re.match(f'{FullInterfaceName}: <{InterfaceStatusFlags}> mtu {MTU} qdisc {QDISC}( master {FullInterfaceName}|) state {InterfaceState} group {InterfaceGroup} qlen {QLEN}', curr_line)
+            res = re.match(
+                f'{re_full_interface_name}: <{re_interface_status_flags}> mtu {re_mtu} qdisc {re_qdisc}( master {re_full_interface_name}|) state {re_interface_state} group {re_interface_group} qlen {re_qlen}',
+                curr_line
+            )
             if res:
                 # We have hit a new interface, do we have a previous set of data?
-                if curr_interface != {}:
+                if curr_interface:
                     interface_list.append(curr_interface)
                     curr_interface = {}
                     position = 'root'
@@ -239,7 +243,7 @@ class EdgeOS(drivers.base.DriverBase):
                 curr_interface['Description'] = res.group(1)
                 continue
 
-            res = re.match(f'\s+link/ether {MAC} brd {MAC}', curr_line)
+            res = re.match(f'\s+link/ether {re_mac} brd {re_mac}', curr_line)
             if res:
                 curr_interface['MAC'] = res.group(1)
                 curr_interface['Broadcast'] = res.group(2)
@@ -274,7 +278,7 @@ class EdgeOS(drivers.base.DriverBase):
                 continue
 
             # These lines set state
-            res = re.match(f'\s+{AddressFamily} {IP_WITH_MASK}( brd {IP}|) scope {AddressScope}( {InterfaceName}|)', curr_line)
+            res = re.match(f'\s+{re_address_family} {rep_ip_with_mask}( brd {re_ip}|) scope {re_address_scope}( {re_interface_name}|)', curr_line)
             if res:
                 if 'Addresses' not in curr_interface:
                     curr_interface['Addresses'] = []
@@ -399,7 +403,7 @@ class EdgeOS(drivers.base.DriverBase):
 
 
     def get_ipaddresses(self):
-        '''
+        '''Get IP addresses assigned to device.
         '''
         logger.debug("Entered EdgeOS.get_ipaddresses")
 
