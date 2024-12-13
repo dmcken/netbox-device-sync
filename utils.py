@@ -7,11 +7,6 @@ General Utility definitions and functions
 import ipaddress
 import re
 
-# Local imports
-import drivers.edgeos
-import drivers.junos
-import drivers.routeros
-
 # Common definitions
 link_local_subnet = ipaddress.ip_network('fe80::/10')
 
@@ -36,15 +31,6 @@ networks_to_ignore = [
 acceptable_device_status = [
     'active',
 ]
-
-# How best to make this dynamic (likely factory method)
-# Drivers for use to fetch the data from devices:
-# - EdgeRouter
-platform_to_driver = {
-    'JunOS':            drivers.junos.JunOS,
-    'RouterOS':         drivers.routeros.RouterOS,
-    'Ubiquiti EdgeOS':  drivers.edgeos.EdgeOS,
-}
 
 # Utility functions
 def parse_device_parameters(config):

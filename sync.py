@@ -20,18 +20,21 @@ import pynetbox
 # Local imports
 import config
 import drivers.base
+import drivers.edgeos
+import drivers.junos
+import drivers.routeros
 import utils
 
 logger = logging.getLogger(__name__)
 
-def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.DriverBase):
-    '''
+def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.DriverBase) -> None:
+    """Sync interfaces to devices.
 
-    nb - pynetbox instance
-    device_nb - the device from netbox's perspective
-    device_conn -
-    '''
-
+    Args:
+        nb (pynetbox.api): pynetbox API instance.
+        device_nb (_type_): The device from netbox's perspective.
+        device_conn (drivers.base.DriverBase): _description_
+    """
     # - Interfaces:
     # -- flag the routing instance / logical systems (use VRF to keep track of this)
     # -- On SRXes use tags to flag the security-zones
@@ -40,12 +43,12 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
     nb_interfaces_names = set(map(lambda x: x.name, nb_interfaces))
     dev_interfaces = device_conn.get_interfaces()
     dev_interfaces_names = set(map(lambda x: x['name'], dev_interfaces))
-    #logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
-    #    pprint.pformat(dev_interfaces, width=200)))
+    # logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
+    # pprint.pformat(dev_interfaces, width=200)))
 
-    to_add_to_netbox = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))
+    to_add_to_netbox     = sorted(list(dev_interfaces_names.difference(nb_interfaces_names)))
     to_check_for_updates = sorted(list(nb_interfaces_names.intersection(dev_interfaces_names)))
-    to_delete_from_nb = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
+    to_delete_from_nb    = sorted(list(nb_interfaces_names.difference(dev_interfaces_names)))
     logger.debug(
         f"\nAdd: {to_add_to_netbox}\nDel: {to_delete_from_nb}\nUpdate: {to_check_for_updates}"
     )
@@ -79,6 +82,7 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
                         }
                         curr_nb_obj.type = v
                 elif k in ['bridge','lag','parent']:
+                    new_parent = None
                     if v:
                         try:
                             nb_parent_interfaces = list(
@@ -137,18 +141,25 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
                         cleaned_params[master_interface] = nb_parent_interfaces[0].id
                     except (IndexError, KeyError, AttributeError):
                         logger.error(
-                            f"Unable to fetch parent interface '{device_nb.name}' => '{cleaned_params[master_interface]}'"
+                            f"Unable to fetch parent interface '{device_nb.name}'"
+                            f" => '{cleaned_params[master_interface]}'"
                         )
                         cleaned_params[master_interface] = None
 
-            logger.info("Creating '{0}' on '{1}' => {2}".format(curr_dev_interface['name'], device_nb.name, cleaned_params))
+            logger.info(
+                f"Creating '{curr_dev_interface['name']}' on "
+                f"'{device_nb.name}' => {cleaned_params}"
+            )
             try:
                 nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
-            except pynetbox.core.query.RequestError as e:
-                logger.error("Netbox API Error '{0}' creating interface {1}/{2}".format(e, cleaned_params, device_nb.name))
+            except pynetbox.core.query.RequestError as exc:
+                logger.error(
+                    f"Netbox API Error '{exc}' creating interface "
+                    f"{cleaned_params}/{device_nb.name}"
+                )
                 continue
 
-    # Delete extra interfaces
+    # Delete extra interfaces on the device.
     nb_interfaces_to_delete = filter(lambda x: x.name in to_delete_from_nb, nb_interfaces)
     for curr_int_to_delete in nb_interfaces_to_delete:
         curr_int_to_delete.delete()
@@ -278,6 +289,9 @@ def sync_ips(nb_api: pynetbox.api, device_nb, device_conn) -> None:
 
 def setup_logging(args: argparse.Namespace) -> None:
     """Setup logging.
+
+    Args:
+        args (argparse.Namespace): CLI arguments passed to app.
     """
     # Upstream libraries
     logging.getLogger('ncclient').setLevel(logging.ERROR)
@@ -286,7 +300,15 @@ def setup_logging(args: argparse.Namespace) -> None:
     # Internal modules
     logging.getLogger('__main__').setLevel(logging.INFO)
     logging.getLogger('drivers.edgeos').setLevel(logging.ERROR)
-    logging.basicConfig(level = logging.INFO, format=config.LOGGING_FORMAT)
+    if args.debug is True:
+        log_level = logging.DEBUG
+    else:
+        log_level = logging.INFO
+
+    logging.basicConfig(
+        level = log_level,
+        format=config.LOGGING_FORMAT,
+    )
 
 def parse_arguments() -> argparse.Namespace:
     """Parse arguments.
@@ -312,6 +334,15 @@ def main() -> None:
         token=config.NB_TOKEN,
         threading = True
     )
+
+    # How best to make this dynamic (likely factory method)
+    # Drivers for use to fetch the data from devices:
+    # - EdgeRouter
+    platform_to_driver = {
+        'JunOS':            drivers.junos.JunOS,
+        'RouterOS':         drivers.routeros.RouterOS,
+        'Ubiquiti EdgeOS':  drivers.edgeos.EdgeOS,
+    }
 
     device_credentials = utils.parse_device_parameters(config)
 
@@ -347,7 +378,7 @@ def main() -> None:
             # Build the driver and connect to the device
             # Create a driver passing it the credentials and the primary IP
             try:
-                driver = utils.platform_to_driver[str(device_nb.platform)]
+                driver = platform_to_driver[str(device_nb.platform)]
             except KeyError as exc:
                 raise drivers.base.ConnectError(
                     f"Unsupported platform '{device_nb.platform}'"
