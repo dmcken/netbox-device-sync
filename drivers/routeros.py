@@ -67,6 +67,7 @@ class RouterOS(drivers.base.DriverBase):
             pass
 
     def get_interfaces(self,) -> None:
+        '''Get interfaces associated with device'''
 
         rez_parent_interfaces = []
         rez_interfaces = []
