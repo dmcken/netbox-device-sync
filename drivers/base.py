@@ -89,6 +89,16 @@ class DriverBase(metaclass = abc.ABCMeta):
     _link_local_subnet   = utils.link_local_subnet
     _connect_params = {}
     _connection = None
+    # Regexes expected to be common to all drivers
+    _common_re = {
+        # MAC addresses
+        'MAC': r'([A-Fa-f0-9:]+)',
+        # IP addresses (v4 and v6)
+        'IP':  r'([0-9A-Fa-f:\.]+)',
+        'IP_WITH_MASK': r'([0-9A-Fa-f:\.]+)/([0-9]+)',
+    }
+    # To be overridden by the driver
+    _dev_re = {}
 
     def __init__(self, **kwargs) -> None:
 
@@ -173,7 +183,7 @@ class DriverBase(metaclass = abc.ABCMeta):
 
     @abc.abstractmethod
     def get_ipaddresses(self,):
-        '''
+        '''Get IP addresses assigned to device.
         TODO: Document what is expected of the drivers
 
         Return:
