@@ -136,16 +136,24 @@ class RouterOS(drivers.base.DriverBase):
             else:
                 # Handle the parent relationships
                 if interface_rec['name'] in bridge_ports_slave_dict:
-                    interface_rec['bridge'] = bridge_ports_slave_dict[interface_rec['name']]['bridge']
+                    interface_rec['bridge'] = bridge_ports_slave_dict[
+                        interface_rec['name']
+                    ]['bridge']
 
                 if interface_rec['name'] in lag_ints_slave_dict:
-                    interface_rec['lag'] = lag_ints_slave_dict[interface_rec['name']]['name']
+                    interface_rec['lag'] = lag_ints_slave_dict[
+                        interface_rec['name']
+                    ]['name']
 
                 if interface_rec['name'] in vlan_ints_parent_dict:
-                    interface_rec['parent'] = vlan_ints_parent_dict[interface_rec['name']]['interface']
+                    interface_rec['parent'] = vlan_ints_parent_dict[
+                        interface_rec['name']
+                    ]['interface']
 
                 if interface_rec['name'] in vrrp_ints_slave_dict:
-                    interface_rec['parent'] = vrrp_ints_slave_dict[interface_rec['name']]['interface']
+                    interface_rec['parent'] = vrrp_ints_slave_dict[
+                        interface_rec['name']
+                    ]['interface']
 
                 rez_interfaces.append(interface_rec)
 
