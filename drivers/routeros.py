@@ -94,25 +94,26 @@ class RouterOS(drivers.base.DriverBase):
 
         for curr_interface in ros_interfaces:
             logger.debug(f"Interface data: {pprint.pformat(curr_interface)}")
-            interface_rec = {
-                'name': curr_interface['name'],
-            }
+
+            interface_rec = drivers.base.Interface(
+                name=curr_interface['name']
+            )
 
             try:
-                interface_rec['mac_address'] = curr_interface['mac-address']
+                interface_rec.mac_address = curr_interface['mac-address']
             except KeyError:
-                interface_rec['mac_address'] = None
+                interface_rec.mac_address = None
 
             try:
-                interface_rec['mtu'] = int(curr_interface['mtu'])
+                interface_rec.mtu = int(curr_interface['mtu'])
             except ValueError:
                 try:
-                    interface_rec['mtu'] = int(curr_interface['actual-mtu'])
+                    interface_rec.mtu = int(curr_interface['actual-mtu'])
                 except KeyError:
-                    interface_rec['mtu'] = None
+                    interface_rec.mtu = None
             except KeyError:
                 logger.error(f"Missing MTU for interface: {curr_interface['name']}")
-                interface_rec['mtu'] = None
+                interface_rec.mtu = None
 
                 # logger.error("Invalid MTU '{0}' on {1}".format(
                 #     curr_interface['mtu'],
@@ -120,39 +121,39 @@ class RouterOS(drivers.base.DriverBase):
                 # ))
 
             try:
-                interface_rec['description'] = curr_interface['comment'].strip()
+                interface_rec.description = curr_interface['comment'].strip()
             except KeyError:
-                interface_rec['description'] = None
+                interface_rec.description = None
 
             # Map from mikrotik types to netbox types
             try:
-                interface_rec['type'] = self._type_map[curr_interface['type']]
+                interface_rec.type = self._type_map[curr_interface['type']]
             except KeyError:
-                interface_rec['type'] = None
+                interface_rec.type = None
 
             # Make sure we have the parents created first.
-            if interface_rec['type'] in self._parent_types:
+            if interface_rec.type in self._parent_types:
                 rez_parent_interfaces.append(interface_rec)
             else:
                 # Handle the parent relationships
-                if interface_rec['name'] in bridge_ports_slave_dict:
-                    interface_rec['bridge'] = bridge_ports_slave_dict[
-                        interface_rec['name']
+                if interface_rec.name in bridge_ports_slave_dict:
+                    interface_rec.bridge = bridge_ports_slave_dict[
+                        interface_rec.name
                     ]['bridge']
 
-                if interface_rec['name'] in lag_ints_slave_dict:
-                    interface_rec['lag'] = lag_ints_slave_dict[
-                        interface_rec['name']
+                if interface_rec.name in lag_ints_slave_dict:
+                    interface_rec.lag = lag_ints_slave_dict[
+                        interface_rec.name
                     ]['name']
 
-                if interface_rec['name'] in vlan_ints_parent_dict:
-                    interface_rec['parent'] = vlan_ints_parent_dict[
-                        interface_rec['name']
+                if interface_rec.name in vlan_ints_parent_dict:
+                    interface_rec.parent = vlan_ints_parent_dict[
+                        interface_rec.name
                     ]['interface']
 
-                if interface_rec['name'] in vrrp_ints_slave_dict:
-                    interface_rec['parent'] = vrrp_ints_slave_dict[
-                        interface_rec['name']
+                if interface_rec.name in vrrp_ints_slave_dict:
+                    interface_rec.parent = vrrp_ints_slave_dict[
+                        interface_rec.name
                     ]['interface']
 
                 rez_interfaces.append(interface_rec)

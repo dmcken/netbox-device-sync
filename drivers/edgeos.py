@@ -363,41 +363,42 @@ class EdgeOS(drivers.base.DriverBase):
                 logger.error(f"Key error - interface {pprint.pformat(curr_int)}")
                 raise
 
-            interface_record = {}
-            interface_record['name'] = curr_int['FullInterfaceName']
-            interface_record['mtu']  = curr_int['MTU']
+            interface_record = drivers.base.Interface(
+                name=curr_int['FullInterfaceName'],
+                mtu=curr_int['MTU'],
+            )
 
             try:
-                interface_record['type'] = interface_map[curr_int['InterfaceType']]
+                interface_record.type = interface_map[curr_int['InterfaceType']]
             except KeyError:
-                interface_record['type'] = curr_int['InterfaceType']
+                interface_record.type = curr_int['InterfaceType']
 
-            if interface_record['type'] == 'ethernet':
+            if interface_record.type == 'ethernet':
                 # This causes the type to be left alone.
-                interface_record['type'] = None
+                interface_record.type = None
 
             try:
-                interface_record['mac_address'] = curr_int['MAC']
+                interface_record.mac_address = curr_int['MAC']
             except KeyError:
                 # The MAC is not set on EdgeOS devices loopback
                 if curr_int['FullInterfaceName'] not in ['lo','tun0',]:
                     logger.error(f"MAC not set on interface: {curr_int['FullInterfaceName']}")
-                interface_record['mac_address'] = ''
+                interface_record.mac_address = ''
 
             try:
-                interface_record['description'] = curr_int['Description']
+                interface_record.description = curr_int['Description']
             except KeyError:
-                interface_record['description'] = ''
+                interface_record.description = ''
 
             if 'LAG' in curr_int and curr_int['LAG']:
-                interface_record['lag'] = curr_int['LAG']
+                interface_record.lag = curr_int['LAG']
 
             if 'Parent' in curr_int and curr_int['Parent']:
                 if not re.match(self._interfaces_to_ignore_regex, curr_int['Parent']):
-                    interface_record['parent'] = curr_int['Parent']
+                    interface_record.parent = curr_int['Parent']
 
-            if interface_record['name'] in switch_ports:
-                interface_record['bridge'] = switch_ports[interface_record['name']]
+            if interface_record.name in switch_ports:
+                interface_record.bridge = switch_ports[interface_record.name]
 
             interfaces.append(interface_record)
             # logger.debug(f"Interface: {interface_record}")

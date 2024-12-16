@@ -35,7 +35,7 @@ interface_fields_to_sync = {
     'bridge': {},
     'description': {},
     'lag': {},
-    'mac': {},
+    'mac_address': {},
     'mtu': {},
     'name': {},
     'parent': {},
