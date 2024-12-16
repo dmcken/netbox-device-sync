@@ -121,7 +121,7 @@ class JunOS(drivers.base.DriverBase):
         # TODO: Simplify and split up
         # TODO: lag slaves are not setup atm
 
-
+        # Return objects
         parent_interfaces = []
         normal_interfaces = []
         interface_units = []
@@ -135,37 +135,37 @@ class JunOS(drivers.base.DriverBase):
                 continue
 
             #logger.debug("Processing interface:\n{0}".format(pprint.pformat(curr_int, width=200)))
-            interface_dict = {
-                'name': "{0}".format(curr_int['name'])
-            }
+            interface_dict = drivers.base.Interface(
+                name=f"{curr_int['name']}",
+            )
 
             try:
-                interface_dict['description'] = curr_int['description']
+                interface_dict.description = curr_int['description']
             except KeyError:
-                interface_dict['description'] = None
+                interface_dict.description = None
 
             try:
-                interface_dict['mac_address'] = curr_int['current-physical-address']
+                interface_dict.mac_address = curr_int['current-physical-address']
                 if isinstance(interface_dict['mac_address'], collections.OrderedDict):
-                    interface_dict['mac_address'] = interface_dict['mac_address']['#text']
+                    interface_dict.mac_address = interface_dict['mac_address']['#text']
             except KeyError:
-                interface_dict['mac_address'] = None
+                interface_dict.mac_address = None
 
             try:
-                interface_dict['mtu'] = int(curr_int['mtu'])
+                interface_dict.mtu = int(curr_int['mtu'])
             except ValueError:
-                interface_dict['mtu'] = None
+                interface_dict.mtu = None
             except KeyError:
-                logger.error("Missing MTU for interface: {0}".format(curr_int))
-                interface_dict['mtu'] = None
+                logger.error(f"Missing MTU for interface: {curr_int}")
+                interface_dict.mtu = None
 
             # Lag interfaces interfaces
             if re.match('ae[0-9]+', curr_int['name']):
-                interface_dict['type'] = 'lag'
+                interface_dict.type = 'lag'
                 parent_interfaces.append(interface_dict)
             #TODO: Handle bridge interfaces
             else: # Every other type of interface
-                interface_dict['type'] = None
+                interface_dict.type = None
                 normal_interfaces.append(interface_dict)
 
             # Now to handle all logical instances (units in JunOS parlance).
@@ -203,7 +203,7 @@ class JunOS(drivers.base.DriverBase):
                             '''
                             #logger.error("LAG sub-interface: {0}".format(curr_logical_int['address-family']))
                             primary_lag_int,_ = curr_logical_int['address-family']['ae-bundle-name'].rsplit('.',maxsplit=1)
-                            interface_dict['lag'] = primary_lag_int
+                            interface_dict.lag = primary_lag_int
                             continue
                     except (KeyError,TypeError):
                         pass
@@ -237,19 +237,22 @@ class JunOS(drivers.base.DriverBase):
 
                     # Seems for the ethernet-switching family the MTU returned is 0
                     if unit_mtu == 0:
-                        unit_mtu = interface_dict['mtu']
+                        unit_mtu = interface_dict.mtu
 
-                    interface_units.append({
-                        'name': "{0}".format(curr_logical_int['name']),
-                        'mtu': unit_mtu,
-                        'mac_address': None,
-                        'type': 'virtual',
-                        'description': unit_descripion,
-                        'parent': '{0}'.format(curr_int['name']),
-                    })
+                    interface_units.append(drivers.base.Interface(
+                        name=f"{curr_logical_int['name']}",
+                        mtu=unit_mtu,
+                        mac_address=None,
+                        type='virtual',
+                        description=unit_descripion,
+                        parent=f"{curr_int['name']}",
+                    ))
 
         int_filter = '<configuration><interfaces/><protocols/></configuration>'
-        dev_config = self._dev.rpc.get_config(filter_xml=int_filter, options={'database' : 'committed'})
+        dev_config = self._dev.rpc.get_config(
+            filter_xml=int_filter,
+            options={'database' : 'committed'}
+        )
         config_dict = xmltodict.parse(etree.tostring(dev_config))
 
         # From the config we can fetch the layer 2 info (lags and vlan config)

@@ -38,12 +38,12 @@ class Interface:
     """A network device interface"""
     name: str
     bridge: str | None = None
-    description: str = ''
+    description: str = None
     lag: str | None = None
-    mac: str = ''
+    mac_address: str = None
     mtu: int | None = None
     parent: str | None = None
-    type: str = ''
+    type: str = None
 
 @dataclasses.dataclass
 class IPAddress:
@@ -172,13 +172,18 @@ class DriverBase(metaclass = abc.ABCMeta):
         -- type: Type of the interface (string,None allowed)
 
         Example:
-        {
-            'description': None,
-            'mac_address': '64:87:88:ef:34:00',
-            'mtu': 1514,
-            'name': 'ge-0/0/0',
-            'type': None
-        }
+        drivers.base.Interfaces(
+            description=None,
+            mac_address='64:87:88:ef:34:00',
+            mtu=1514,
+            name='ge-0/0/0',
+            type=None
+        )
+
+        # The return ordering is important
+        # We are creating certain parent interfaces like aeX, lo0 first
+        # Then the physical interfaces (mostly confirming they are in place)
+        # Finally the units built on top of the first two.
         '''
 
     @abc.abstractmethod

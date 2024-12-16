@@ -92,7 +92,7 @@ def interface_update(nb: pynetbox.api, device_nb, nb_interface_dict, curr_dev_in
                     new_parent = nb_parent_interfaces[0].id
                 except IndexError:
                     logger.error(
-                        f"Could not look up parent interface for '{curr_dev_interface}"
+                        f"Could not look up parent interface for '{curr_dev_interface} => {v}"
                     )
                     continue
             else: # The parent interface is None
@@ -119,7 +119,8 @@ def interface_update(nb: pynetbox.api, device_nb, nb_interface_dict, curr_dev_in
 
     if changed:
         logger.info(
-            f"Updating '{curr_dev_interface.name}' on '{device_nb.name}' => {changed}"
+            f"Updating '{curr_dev_interface.name}' on '{device_nb.name}' " +
+            f"=> {pprint.pformat(changed)}"
         )
         curr_nb_obj.save()
 
@@ -139,7 +140,7 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
     nb_interface_dict = {v.name:v for v in nb_interfaces}
     nb_interfaces_names = set(map(lambda x: x.name, nb_interfaces))
     dev_interfaces = device_conn.get_interfaces()
-    dev_interfaces_names = set(map(lambda x: x['name'], dev_interfaces))
+    dev_interfaces_names = set(map(lambda x: x.name, dev_interfaces))
     # logger.info("Interface data for '{0}'\n{1}".format(device_nb.name,
     # pprint.pformat(dev_interfaces, width=200)))
 
@@ -153,15 +154,12 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
     for curr_dev_interface in dev_interfaces:
         cleaned_params = {}
         for curr_param, param_data in utils.interface_fields_to_sync.items():
-            if curr_param not in curr_dev_interface.__dataclass_fields__:
-                continue
-
-            if curr_dev_interface.__dataclass_fields__[curr_param] is None:
+            cleaned_params[curr_param] = getattr(curr_dev_interface, curr_param)
+            if cleaned_params[curr_param] is None:
+                del cleaned_params[curr_param]
                 continue
 
             # Use extra meta data in param_data to perform additional cleaning.
-
-            cleaned_params[curr_param] = curr_dev_interface[curr_param]
 
         if curr_dev_interface.name in nb_interface_dict:
             interface_update(
