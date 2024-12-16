@@ -278,7 +278,10 @@ class EdgeOS(drivers.base.DriverBase):
                 continue
 
             # These lines set state
-            res = re.match(f'\s+{re_address_family} {rep_ip_with_mask}( brd {re_ip}|) scope {re_address_scope}( {re_interface_name}|)', curr_line)
+            res = re.match(
+                f'\s+{re_address_family} {rep_ip_with_mask}( brd {re_ip}|) scope {re_address_scope}( {re_interface_name}|)',
+                curr_line
+            )
             if res:
                 if 'Addresses' not in curr_interface:
                     curr_interface['Addresses'] = []
