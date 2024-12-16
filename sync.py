@@ -27,6 +27,103 @@ import utils
 
 logger = logging.getLogger(__name__)
 
+def interface_create(nb: pynetbox.api, device_nb, cleaned_params, curr_dev_interface):
+
+    if 'type' not in cleaned_params:
+        # Type is mandatory
+        cleaned_params['type'] = 'other'
+
+    for master_interface in ['bridge','lag','parent']:
+        if master_interface in cleaned_params and \
+            cleaned_params[master_interface] is not None:
+            nb_parent_interfaces = list(
+                nb.dcim.interfaces.filter(
+                    device=device_nb.name,
+                    name=cleaned_params[master_interface],
+                )
+            )
+            try:
+                cleaned_params[master_interface] = nb_parent_interfaces[0].id
+            except (IndexError, KeyError, AttributeError):
+                logger.error(
+                    f"Unable to fetch parent interface '{device_nb.name}'"
+                    f" => '{cleaned_params[master_interface]}'"
+                )
+                cleaned_params[master_interface] = None
+
+    logger.info(
+        f"Creating '{curr_dev_interface.name}' on "
+        f"'{device_nb.name}' => {cleaned_params}"
+    )
+    try:
+        nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
+    except pynetbox.core.query.RequestError as exc:
+        logger.error(
+            f"Netbox API Error '{exc}' creating interface "
+            f"{cleaned_params}/{device_nb.name}"
+        )
+
+def interface_update(nb: pynetbox.api, device_nb, nb_interface_dict, curr_dev_interface,
+                     cleaned_params: dict[str,str]):
+
+
+    curr_nb_obj = nb_interface_dict[curr_dev_interface.name]
+    changed = {}
+    for k,v in cleaned_params.items():
+        # Only update if different
+
+        # Type's get has the value in type.value vs type itself.
+        # Ugly hack for now.
+        if k == 'type':
+            if curr_nb_obj.type.value != v:
+                changed[k] = {
+                    'old': str(curr_nb_obj.type.value),
+                    'new': v,
+                }
+                curr_nb_obj.type = v
+        elif k in ['bridge','lag','parent']:
+            new_parent = None
+            if v:
+                try:
+                    nb_parent_interfaces = list(
+                        nb.dcim.interfaces.filter(device=device_nb.name,name=v)
+                    )
+                    new_parent_desc = f"{nb_parent_interfaces[0].id}/{v}"
+                    new_parent = nb_parent_interfaces[0].id
+                except IndexError:
+                    logger.error(
+                        f"Could not look up parent interface for '{curr_dev_interface}"
+                    )
+                    continue
+            else: # The parent interface is None
+                new_parent_desc = f"{v}"
+
+
+            if k_attr := getattr(curr_nb_obj, k):
+                old_parent_desc = f"{k_attr.id}/{nb_parent_interfaces[0].name}"
+            else:
+                old_parent_desc = "None"
+
+            if new_parent_desc != old_parent_desc:
+                changed[k] = {
+                    'old': old_parent_desc,
+                    'new': new_parent_desc,
+                }
+                setattr(curr_nb_obj, k, new_parent)
+        elif getattr(curr_nb_obj,k) != v:
+            changed[k] = {
+                'old': getattr(curr_nb_obj,k),
+                'new': v,
+            }
+            setattr(curr_nb_obj, k, v)
+
+    if changed:
+        logger.info(
+            f"Updating '{curr_dev_interface.name}' on '{device_nb.name}' => {changed}"
+        )
+        curr_nb_obj.save()
+
+
 def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.DriverBase) -> None:
     """Sync interfaces to devices.
 
@@ -54,117 +151,38 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
     )
 
     for curr_dev_interface in dev_interfaces:
-
         cleaned_params = {}
-        for curr_param in ['bridge','description','lag','mac','mtu','name','parent','type']:
-            try:
-                if curr_dev_interface[curr_param] is None:
-                    continue
-            except KeyError:
+        for curr_param, param_data in utils.interface_fields_to_sync.items():
+            if curr_param not in curr_dev_interface.__dataclass_fields__:
                 continue
+
+            if curr_dev_interface.__dataclass_fields__[curr_param] is None:
+                continue
+
+            # Use extra meta data in param_data to perform additional cleaning.
+
             cleaned_params[curr_param] = curr_dev_interface[curr_param]
 
-        if curr_dev_interface['name'] in nb_interface_dict:
-            # Update
-
-            curr_nb_obj = nb_interface_dict[curr_dev_interface['name']]
-            changed = {}
-            for k,v in cleaned_params.items():
-                # Only update if different
-
-                # Type's get has the value in type.value vs type itself.
-                # Ugly hack for now.
-                if k == 'type':
-                    if curr_nb_obj.type.value != v:
-                        changed[k] = {
-                            'old': str(curr_nb_obj.type.value),
-                            'new': v,
-                        }
-                        curr_nb_obj.type = v
-                elif k in ['bridge','lag','parent']:
-                    new_parent = None
-                    if v:
-                        try:
-                            nb_parent_interfaces = list(
-                                nb.dcim.interfaces.filter(device=device_nb.name,name=v)
-                            )
-                            new_parent_desc = f"{nb_parent_interfaces[0].id}/{v}"
-                            new_parent = nb_parent_interfaces[0].id
-                        except IndexError:
-                            logger.error(
-                                f"Could not look up parent interface for '{curr_dev_interface}"
-                            )
-                            continue
-                    else: # The parent interface is None
-                        new_parent_desc = f"{v}"
-
-
-                    if k_attr := getattr(curr_nb_obj, k):
-                        old_parent_desc = f"{k_attr.id}/{nb_parent_interfaces[0].name}"
-                    else:
-                        old_parent_desc = "None"
-
-                    if new_parent_desc != old_parent_desc:
-                        changed[k] = {
-                            'old': old_parent_desc,
-                            'new': new_parent_desc,
-                        }
-                        setattr(curr_nb_obj, k, new_parent)
-                elif getattr(curr_nb_obj,k) != v:
-                    changed[k] = {
-                        'old': getattr(curr_nb_obj,k),
-                        'new': v,
-                    }
-                    setattr(curr_nb_obj, k, v)
-
-            if changed:
-                logger.info(
-                    f"Updating '{curr_dev_interface['name']}' on '{device_nb.name}' => {changed}"
-                )
-                curr_nb_obj.save()
-        else:
-            # Create interface
-            if 'type' not in cleaned_params:
-                # Type is mandatory
-                cleaned_params['type'] = 'other'
-
-            for master_interface in ['bridge','lag','parent']:
-                if master_interface in cleaned_params and \
-                    cleaned_params[master_interface] is not None:
-                    nb_parent_interfaces = list(
-                        nb.dcim.interfaces.filter(
-                            device=device_nb.name,
-                            name=cleaned_params[master_interface],
-                        )
-                    )
-                    try:
-                        cleaned_params[master_interface] = nb_parent_interfaces[0].id
-                    except (IndexError, KeyError, AttributeError):
-                        logger.error(
-                            f"Unable to fetch parent interface '{device_nb.name}'"
-                            f" => '{cleaned_params[master_interface]}'"
-                        )
-                        cleaned_params[master_interface] = None
-
-            logger.info(
-                f"Creating '{curr_dev_interface['name']}' on "
-                f"'{device_nb.name}' => {cleaned_params}"
+        if curr_dev_interface.name in nb_interface_dict:
+            interface_update(
+                nb,
+                device_nb,
+                nb_interface_dict,
+                curr_dev_interface,
+                cleaned_params,
             )
-            try:
-                nb.dcim.interfaces.create(device=device_nb.id, **cleaned_params)
-            except pynetbox.core.query.RequestError as exc:
-                logger.error(
-                    f"Netbox API Error '{exc}' creating interface "
-                    f"{cleaned_params}/{device_nb.name}"
-                )
-                continue
+        else:
+            interface_create(
+                nb,
+                device_nb,
+                cleaned_params,
+                curr_dev_interface,
+            )
 
-    # Delete extra interfaces on the device.
+    # Delete extra interfaces in netbox that are no longer on the device.
     nb_interfaces_to_delete = filter(lambda x: x.name in to_delete_from_nb, nb_interfaces)
     for curr_int_to_delete in nb_interfaces_to_delete:
         curr_int_to_delete.delete()
-
-    return
 
 def create_ip_address(nb: pynetbox.api, curr_ip, nb_interface_dict) -> None:
     """Create IP address.
