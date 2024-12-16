@@ -31,6 +31,16 @@ networks_to_ignore = [
 acceptable_device_status = [
     'active',
 ]
+interface_fields_to_sync = {
+    'bridge': {},
+    'description': {},
+    'lag': {},
+    'mac': {},
+    'mtu': {},
+    'name': {},
+    'parent': {},
+    'type': {},
+}
 
 # Utility functions
 def parse_device_parameters(config):
