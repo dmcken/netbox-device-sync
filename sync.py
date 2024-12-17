@@ -160,6 +160,8 @@ def sync_interfaces(nb: pynetbox.api, device_nb, device_conn: drivers.base.Drive
                 continue
 
             # Use extra meta data in param_data to perform additional cleaning.
+            if 'clean' in param_data:
+                cleaned_params[curr_param] = param_data['clean'](cleaned_params[curr_param])
 
         if curr_dev_interface.name in nb_interface_dict:
             interface_update(
@@ -192,11 +194,11 @@ def create_ip_address(nb: pynetbox.api, curr_ip, nb_interface_dict) -> None:
     """
     logger.info(f"Creating IP record: {curr_ip}")
     nb.ipam.ip_addresses.create(
-        assigned_object_id=nb_interface_dict[curr_ip['interface']].id,
+        assigned_object_id=nb_interface_dict[curr_ip.interface].id,
         assigned_object_type='dcim.interface',
-        address=str(curr_ip['address']),
-        status=curr_ip['status'],
-        vrf=curr_ip['vrf'],
+        address=str(curr_ip.address),
+        status=curr_ip.status,
+        vrf=curr_ip.vrf,
     )
     return
 
@@ -212,24 +214,24 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
     if len(nb_ip_record) == 1:
         changed = False
 
-        if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip['interface']].id or \
+        if nb_ip_record[0].assigned_object_id != nb_interface_dict[curr_ip.interface].id or \
             nb_ip_record[0].assigned_object_type != 'dcim.interface':
             logger.info(
                 f"Updating IP interface from '{nb_ip_record[0].assigned_object_type}':"
                 f"{nb_ip_record[0].assigned_object_id} -> "
-                f"{nb_interface_dict[curr_ip['interface']].id}"
+                f"{nb_interface_dict[curr_ip.interface].id}"
             )
-            nb_ip_record[0].assigned_object_id = nb_interface_dict[curr_ip['interface']].id
+            nb_ip_record[0].assigned_object_id = nb_interface_dict[curr_ip.interface].id
             nb_ip_record[0].assigned_object_type = 'dcim.interface'
             changed = True
 
-        if nb_ip_record[0].status.value != curr_ip['status']:
-            logger.info(f"Updating status: {nb_ip_record[0].status.value} -> {curr_ip['status']}")
-            nb_ip_record[0].status = curr_ip['status']
+        if nb_ip_record[0].status.value != curr_ip.status:
+            logger.info(f"Updating status: {nb_ip_record[0].status.value} -> {curr_ip.status}")
+            nb_ip_record[0].status = curr_ip.status
             changed = True
 
-        if nb_ip_record[0].vrf != curr_ip['vrf']:
-            nb_ip_record[0].vrf = curr_ip['vrf']
+        if nb_ip_record[0].vrf != curr_ip.vrf:
+            nb_ip_record[0].vrf = curr_ip.vrf
             logger.info("Updating vrf")
             changed = True
 
@@ -237,11 +239,11 @@ def update_ip_address(curr_ip, nb_ip_record, nb_interface_dict) -> None:
             logger.info(f"Updating IP record: {curr_ip} -> {changed}")
             nb_ip_record[0].save()
     else:
-        logger.error(f"Multiple IPs found for: {curr_ip['address']}")
+        logger.error(f"Multiple IPs found for: {curr_ip.address}")
 
     return
 
-def sync_ips(nb_api: pynetbox.api, device_nb, device_conn) -> None:
+def sync_ips(nb_api: pynetbox.api, device_nb, device_conn: drivers.base.DriverBase) -> None:
     """Sync IP addresses.
 
     Args:
@@ -253,7 +255,7 @@ def sync_ips(nb_api: pynetbox.api, device_nb, device_conn) -> None:
     # - IP Addresses - The matching interfaces should already exist (create the matching prefixes)
     dev_ips = device_conn.get_ipaddresses()
     for curr_network in utils.networks_to_ignore:
-        dev_ips = list(filter(lambda x: x['address'] not in curr_network, dev_ips))
+        dev_ips = list(filter(lambda x: x.address not in curr_network, dev_ips))
     logger.debug(
         f"Raw IP data for '{device_nb.name}'\n" +
         f"{pprint.pformat(dev_ips, width=200)}"
@@ -268,21 +270,21 @@ def sync_ips(nb_api: pynetbox.api, device_nb, device_conn) -> None:
 
     for curr_ip in dev_ips:
         logger.debug(f"Processing IP address: {curr_ip}")
-        if curr_ip['interface'] not in nb_interface_dict:
+        if curr_ip.interface not in nb_interface_dict:
             logger.error(f"Missing interface for IP: {curr_ip}")
             continue
 
-        nb_ip_network = nb_api.ipam.prefixes.filter(prefix=str(curr_ip['address'].network))
+        nb_ip_network = nb_api.ipam.prefixes.filter(prefix=str(curr_ip.address.network))
         if not nb_ip_network:
-            logger.error(f"Creating prefix: {curr_ip['address'].network}")
+            logger.error(f"Creating prefix: {curr_ip.address.network}")
             nb_api.ipam.prefixes.create(
-                prefix=f"{curr_ip['address'].network}",
-                vrf=curr_ip['vrf'],
+                prefix=f"{curr_ip.address.network}",
+                vrf=curr_ip.vrf,
                 status='active',
             )
 
 
-        if nb_ip_record := list(nb_api.ipam.ip_addresses.filter(address=curr_ip['address'])):
+        if nb_ip_record := list(nb_api.ipam.ip_addresses.filter(address=curr_ip.address)):
             # We only want to update if its on the same device.
             if nb_ip_record[0].assigned_object_type == 'dcim.interface' \
                 and nb_ip_record[0].assigned_object_id in nb_interface_id_list:
@@ -293,7 +295,7 @@ def sync_ips(nb_api: pynetbox.api, device_nb, device_conn) -> None:
             create_ip_address(nb_api, curr_ip, nb_interface_dict)
 
     # Now we need to check for those that need to be removed from netbox
-    to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x['address'], dev_ips)))
+    to_del = set(nb_ipaddresses_dict.keys()).difference(set(map(lambda x: x.address, dev_ips)))
     for curr_to_del in to_del:
         logger.info(
             f"Deleting IP record: {nb_ipaddresses_dict[curr_to_del].id}"

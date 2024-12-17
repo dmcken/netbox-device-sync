@@ -49,6 +49,9 @@ class Interface:
 class IPAddress:
     """IP Address"""
     address: ipaddress.IPv4Interface | ipaddress.IPv6Interface
+    interface: str = None
+    status: str = None
+    vrf: str = None
 
 @dataclasses.dataclass
 class Route:
@@ -58,14 +61,28 @@ class Route:
 
 @dataclasses.dataclass
 class Vlan:
-    '''Vlan definition'''
+    '''Vlan definition.
+
+    These are vlans defined for the purposes of trunking.
+    Vlan virtual interfaces (usually with IPs) are treated as interfaces.
+    '''
     id: int
+    name: str = None
+    description: str = None
+    status: str = None
 
 @dataclasses.dataclass
 class Neighbour:
-    '''Neighbour to current device'''
-    mac: str
-    interface: str
+    '''Neighbour to current device.
+
+    Can be lldp, CDP, ARP, NDP, etc.
+    '''
+    mac: str = None
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address
+    name: str = None
+    interface: str = None
+    source: str = None
+    extra_data: str = None
 
 # Factories
 class DriverFactory:
@@ -156,7 +173,7 @@ class DriverBase(metaclass = abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def get_interfaces(self,):
+    def get_interfaces(self,) -> list[Interface]:
         '''Get interfaces associated with device.
         TODO: Document what is expected of the drivers
 

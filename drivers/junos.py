@@ -340,12 +340,12 @@ class JunOS(drivers.base.DriverBase):
                                 if interface_addr in self._link_local_subnet:
                                     continue
 
-                            ip_addresses.append({
-                                'address': interface_addr,
-                                'vrf': None,
-                                'status': 'active',
-                                'interface': "{0}".format(curr_logical_int['name']),
-                            })
+                            ip_addresses.append(drivers.base.IPAddress(
+                                address=interface_addr,
+                                vrf=None,
+                                status='active',
+                                interface=f"{curr_logical_int['name']}",
+                            ))
 
         return ip_addresses
 

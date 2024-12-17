@@ -185,12 +185,12 @@ class RouterOS(drivers.base.DriverBase):
                 if curr_ip_addr['disabled'] is True:
                     ip_status = 'deprecated'
 
-                ip_rec = {}
-
-                ip_rec['address'] = ipaddress.ip_interface(curr_ip_addr['address'])
-                ip_rec['interface'] = curr_ip_addr['interface']
-                ip_rec['status'] = ip_status
-                ip_rec['vrf'] = None
+                ip_rec = drivers.base.IPAddress(
+                    address = ipaddress.ip_interface(curr_ip_addr['address']),
+                    interface = curr_ip_addr['interface'],
+                    status = ip_status,
+                    vrf = None,
+                )
 
                 rez_ip_addresses.append(ip_rec)
 
