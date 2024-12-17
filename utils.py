@@ -31,16 +31,6 @@ networks_to_ignore = [
 acceptable_device_status = [
     'active',
 ]
-interface_fields_to_sync = {
-    'bridge': {},
-    'description': {},
-    'lag': {},
-    'mac_address': {},
-    'mtu': {},
-    'name': {},
-    'parent': {},
-    'type': {},
-}
 
 # Utility functions
 def parse_device_parameters(config):
@@ -66,3 +56,28 @@ def parse_device_parameters(config):
         device_credentials[attr_re.group(1).lower()] = attr_value
 
     return device_credentials
+
+def clean_mac(mac_address: str) -> str:
+    """Clean a MAC address.
+
+    Netbox operates with upper-case mac addresses.
+
+    Args:
+        mac_address (str): _description_
+
+    Returns:
+        str: _description_
+    """
+    return mac_address.upper()
+
+# Has to be defined down here so it can reference the utility functions.
+interface_fields_to_sync = {
+    'bridge': {},
+    'description': {},
+    'lag': {},
+    'mac_address': {'clean': clean_mac},
+    'mtu': {},
+    'name': {},
+    'parent': {},
+    'type': {},
+}

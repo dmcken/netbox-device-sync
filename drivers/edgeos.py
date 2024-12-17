@@ -426,12 +426,12 @@ class EdgeOS(drivers.base.DriverBase):
                 if curr_address['Address'] in self._addresses_to_ignore:
                     continue
 
-                address_rec = {
-                    'address': curr_address['Address'],
-                    'interface': curr_int['FullInterfaceName'],
-                    'status': 'active',
-                    'vrf': None
-                }
+                address_rec = drivers.base.IPAddress(
+                    address=curr_address['Address'],
+                    interface=curr_int['FullInterfaceName'],
+                    status='active',
+                    vrf=None,
+                )
                 address_list.append(address_rec)
                 # logger.debug(f"Addresses: {address_rec}")
 
